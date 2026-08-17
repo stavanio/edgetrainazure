@@ -1,0 +1,49 @@
+# Copy to terraform.tfvars and fill in. Never commit terraform.tfvars.
+
+prefix      = "edgefrg"
+environment = "dev"          # dev | stage | prod — each is a SEPARATE subscription
+location    = "eastus"       # must have A100 quota and IoT Hub availability
+
+# Geo-replicate ACR into the regions where robot sites actually are. Each
+# replica is a fixed monthly cost — do not add regions speculatively.
+acr_replica_locations = ["westeurope"]
+
+vnet_cidr = "10.42.0.0/16"
+
+# AML compute burns addresses per node; keep snet-aml roomy.
+subnet_cidrs = {
+  private_endpoints  = "10.42.0.0/24"
+  aml_compute        = "10.42.4.0/22"
+  databricks_public  = "10.42.8.0/23"
+  databricks_private = "10.42.10.0/23"
+  batch_sim          = "10.42.12.0/22"
+  functions          = "10.42.16.0/26"
+}
+
+# dev: 1 node is enough to validate the pipeline shape. Raise for stage/prod.
+gpu_train_sku       = "Standard_NC96ads_A100_v4"
+gpu_train_max_nodes = 1
+gpu_eval_sku        = "Standard_NC24ads_A100_v4"
+
+sim_pool_sku       = "Standard_NV36ads_A10_v5"
+sim_pool_max_nodes = 4
+
+# S2 carries telemetry only; MCAP payload goes direct to ADLS via SAS.
+iothub_sku = {
+  name     = "S1"
+  capacity = 1
+}
+
+raw_retention_years = 7
+log_retention_days  = 90
+
+# Entra ID group object IDs. Platform admins are PIM-eligible with no standing
+# access; annotators get PII-redacted /curated read only.
+admin_group_object_id     = "00000000-0000-0000-0000-000000000000"
+annotator_group_object_id = "00000000-0000-0000-0000-000000000000"
+
+tags = {
+  cost_center = "robotics-autonomy"
+  owner       = "platform-team"
+  data_class  = "confidential"
+}
