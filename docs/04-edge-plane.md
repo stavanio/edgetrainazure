@@ -1,13 +1,13 @@
-# 04 — Edge plane
+# 04: Edge plane
 
 > **Design artifact.** This describes an architecture that has not been deployed.
-> Figures are design targets and planning assumptions, not measurements —
+> Figures are design targets and planning assumptions, not measurements,
 > see the status table in the [README](../README.md).
 
 ## 4.1 Optimize
 
 A model that passes every cloud gate is still unproven. The thing that ships is not the
-PyTorch checkpoint — it is a TensorRT engine, quantized, built for one exact silicon and
+PyTorch checkpoint; it is a TensorRT engine, quantized, built for one exact silicon and
 JetPack combination. That transformation changes accuracy, and the change must be measured,
 not assumed.
 
@@ -20,7 +20,7 @@ checkpoint (AML Registry, Approved)
   │                           parity check: max |Δ| vs. PyTorch < 1e-4 over 512 frames
   │
   ├─ 2. INT8 calibration      entropy calibrator over 1,024 frames drawn from /snapshot,
-  │                           stratified across taxonomy cells — NOT a random sample
+  │                           stratified across taxonomy cells, NOT a random sample
   │                           sensitive layers (final heads, first conv) kept FP16
   │
   ├─ 3. TensorRT build        on the target device, for target SM + JetPack + TRT version
@@ -57,7 +57,7 @@ Implementation: [`src/edgeforge/optimize/`](../src/edgeforge/optimize).
 
 ## 4.2 Package
 
-The deliverable is an **edge bundle** — a single OCI artifact in ACR containing everything
+The deliverable is an **edge bundle**: a single OCI artifact in ACR containing everything
 needed to reproduce the robot's inference behaviour:
 
 ```
@@ -79,9 +79,9 @@ untrusted-chain bundle**. This is the single most important control in the syste
 what prevents a compromised pipeline, registry, or network position from putting arbitrary
 inference behaviour onto a 30-tonne machine.
 
-Preprocessing config ships *with* the engine deliberately. Train/serve preprocessing skew —
+Preprocessing config ships *with* the engine deliberately. Train/serve preprocessing skew,
 a different resize interpolation, a swapped colour channel, a normalization constant that
-drifted — is the most common cause of "the model was fine in eval and is bad in the field,"
+drifted, is the most common cause of "the model was fine in eval and is bad in the field,"
 and it is entirely preventable by making the config an artifact rather than code on both
 sides.
 
@@ -91,12 +91,12 @@ sides.
 
 Two layers:
 
-**Base deployment** ([`deploy/iot-edge/deployment.base.json`](../deploy/iot-edge/deployment.base.json)) —
+**Base deployment** ([`deploy/iot-edge/deployment.base.json`](../deploy/iot-edge/deployment.base.json)),
 the runtime that rarely changes: `edgeAgent`, `edgeHub`, `curator`, `telemetry`,
 `ros2-bridge`, local blob store. Targeted at all robots.
 
 **Layered model deployment**
-([`deploy/iot-edge/deployment.layer.model.json`](../deploy/iot-edge/deployment.layer.model.json)) —
+([`deploy/iot-edge/deployment.layer.model.json`](../deploy/iot-edge/deployment.layer.model.json)),
 only the `perception` module and its bundle reference. Higher priority, targeted by twin tag.
 This is what a model release actually changes.
 
@@ -112,9 +112,9 @@ Consequence: shipping a model does not restart the robot's runtime. `perception`
 | `hil` | HIL rack | 2 h | Automated regression suite green |
 | `canary` | 2 robots, 1 site, supervised shift | 1 shift (8 h) | All health SLOs green, zero safety events attributable |
 | `pilot` | All robots at 1 site | 3 shifts | Above + operator sign-off + no false-stop increase |
-| `production` | Fleet | — | Above + 2-person approval |
+| `production` | Fleet | - | Above + 2-person approval |
 
-Targeting is a device-twin tag query — `tags.ring = 'canary'` — so moving a robot between
+Targeting is a device-twin tag query (`tags.ring = 'canary'`), so moving a robot between
 rings is a twin patch. No deployment edit, no manifest churn.
 
 ### Shadow mode
@@ -122,7 +122,7 @@ rings is a twin patch. No deployment edit, no manifest churn.
 For the first ring, `perception` can run the new bundle **alongside** the incumbent, with
 only the incumbent's output wired to the vehicle. The new model's disagreements are logged
 and uploaded as T1 priority. Costs latency headroom, so it is used for one shift, not
-indefinitely — but it is how you find out that a model behaves differently in a real drift
+indefinitely, but it is how you find out that a model behaves differently in a real drift
 without letting it drive anything.
 
 ## 4.4 Health and rollback
@@ -147,7 +147,7 @@ An Azure Monitor rule evaluates a rollback predicate per ring. Any of:
 - `inference_p99_ms > 45` for 3 consecutive windows
 - `dropped_frames_pct > 0.5`
 - `throttled_pct > 5`
-- `detections_per_km.personnel` deviating > 3σ from the ring baseline (either direction —
+- `detections_per_km.personnel` deviating > 3σ from the ring baseline (either direction,
   a collapse means blindness, a spike means nuisance stops)
 - `ood_rate > 5×` the evaluation-set rate
 - Any `disengagement` attributable to perception
@@ -156,8 +156,8 @@ An Azure Monitor rule evaluates a rollback predicate per ring. Any of:
 triggers **automatic rollback**: the rollback driver
 ([`deploy/rollout/rollback.py`](../deploy/rollout/rollback.py)) patches the affected twins'
 `desired.bundle` back to the last-known-good, which the previously-cached bundle satisfies
-without a download. Recovery is bounded by the twin propagation and module reload time —
-seconds to a couple of minutes — not by a redeploy.
+without a download. Recovery is bounded by the twin propagation and module reload time,
+seconds to a couple of minutes, not by a redeploy.
 
 **Last-known-good is always resident on disk.** Robots retain the previous bundle. Rollback
 must never depend on a network the robot may not have.
@@ -172,10 +172,10 @@ already has.
 
 Two shadow-mode outputs feed back with especially high value:
 
-1. **Disagreement frames** — where the new and incumbent models differ. These are, almost by
+1. **Disagreement frames**: where the new and incumbent models differ. These are, almost by
    construction, the frames on the decision boundary, and they are the cheapest high-value
    labeling queue the system produces.
-2. **OOD spikes** — a cluster of high-OOD frames from one site usually means a physical
+2. **OOD spikes**: a cluster of high-OOD frames from one site usually means a physical
    change (new equipment, a re-muck, a changed lighting install) that the dataset has never
    seen. This is the earliest possible warning of drift, and it arrives shift-by-shift rather
    than in a monthly report.

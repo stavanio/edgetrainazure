@@ -103,7 +103,7 @@ def render_model_card(
         f"| {o.tier} | `{o.gate}` | {o.verdict.value} | {o.detail} |" for o in evaluation.outcomes
     )
 
-    return f"""# Model card — `{spec.model}` v{spec.version} ({spec.target_tag})
+    return f"""# Model card, `{spec.model}` v{spec.version} ({spec.target_tag})
 
 Generated {datetime.now(UTC).isoformat(timespec="seconds")} by `edgeforge.packaging.bundle`.
 Do not edit by hand; regenerate from the evaluation run.
@@ -157,11 +157,11 @@ envelope that combines them with geometric and kinematic constraints.
 
 | Metric | Value | Budget |
 |---|---|---|
-| Latency p50 | {build.latency_p50_ms:.1f} ms | — |
+| Latency p50 | {build.latency_p50_ms:.1f} ms | - |
 | Latency p99 | {build.latency_p99_ms:.1f} ms | {build.target.latency_budget_p99_ms:.0f} ms |
 | Sustained power | {build.power_avg_w:.1f} W | {build.target.power_budget_w:.0f} W |
-| Peak power | {build.power_peak_w:.1f} W | — |
-| SoC steady temp | {build.soc_temp_steady_c:.1f} °C | — |
+| Peak power | {build.power_peak_w:.1f} W | - |
+| SoC steady temp | {build.soc_temp_steady_c:.1f} °C | - |
 | Thermally throttled | {build.throttled_pct:.2f} % | < 1 % |
 | INT8 accuracy delta | {build.accuracy_delta_map:.2f} mAP | < 0.8 |
 | ONNX parity (max abs) | {build.onnx_parity_max_abs_diff:.2e} | < 1e-4 |
@@ -277,7 +277,7 @@ def push(root: Path, spec: BundleSpec) -> str:
 def sign(reference_with_digest: str, key_id: str) -> None:
     """Sign with Notation using the HSM-backed Key Vault key.
 
-    The runner can *use* the key and cannot *read* it — Key Vault Crypto User,
+    The runner can *use* the key and cannot *read* it, Key Vault Crypto User,
     not Key Vault Crypto Officer (infra/ml.tf). A compromised runner can sign one
     bad bundle, which the two-person promotion gate still has to approve; it
     cannot walk away with the fleet's signing identity.

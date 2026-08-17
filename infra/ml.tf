@@ -1,5 +1,5 @@
 ###############################################################################
-# Azure Machine Learning — workspace, registry, compute, simulation pool
+# Azure Machine Learning: workspace, registry, compute, simulation pool
 ###############################################################################
 
 resource "azurerm_key_vault" "main" {
@@ -185,7 +185,7 @@ resource "azurerm_machine_learning_compute_cluster" "sweep" {
   tags = local.common_tags
 }
 
-# Evaluation runs under a distinct identity — the only one with golden-set access.
+# Evaluation runs under a distinct identity: the only one with golden-set access.
 resource "azurerm_machine_learning_compute_cluster" "eval" {
   name                          = "gpu-eval"
   location                      = azurerm_resource_group.main.location
@@ -209,7 +209,7 @@ resource "azurerm_machine_learning_compute_cluster" "eval" {
 }
 
 ###############################################################################
-# Simulation — Azure Batch spot pool running headless Isaac Sim
+# Simulation: Azure Batch spot pool running headless Isaac Sim
 ###############################################################################
 
 resource "azurerm_batch_account" "sim" {

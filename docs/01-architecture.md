@@ -1,7 +1,7 @@
-# 01 — Architecture
+# 01: Architecture
 
 > **Design artifact.** This describes an architecture that has not been deployed.
-> Figures are design targets and planning assumptions, not measurements —
+> Figures are design targets and planning assumptions, not measurements,
 > see the status table in the [README](../README.md).
 
 ## 1.1 The workload
@@ -29,7 +29,7 @@ Two facts drive the entire design:
 
 The system is three planes with one control loop across them.
 
-### Data plane — "what the robot saw"
+### Data plane: "what the robot saw"
 
 ```
 robot ring buffer (MCAP)
@@ -49,11 +49,11 @@ robot ring buffer (MCAP)
 ```
 
 Four medallion zones plus an immutable `/snapshot` zone. A training run never reads
-`/curated` directly — it reads a **frozen, content-addressed snapshot** so that any model
+`/curated` directly; it reads a **frozen, content-addressed snapshot** so that any model
 can be re-derived byte-for-byte two years later. This is the lineage requirement for the
 safety case.
 
-### Training plane — "what the robot should have concluded"
+### Training plane: "what the robot should have concluded"
 
 ```
 /curated ──▶ AML Data Labeling ──▶ /labeled ──┐
@@ -66,7 +66,7 @@ sim/ ──▶ Isaac Sim on Azure Batch ────────────┘ 
          (domain randomized)                          └─ gate → AML Registry
 ```
 
-### Edge plane — "what the robot will run"
+### Edge plane: "what the robot will run"
 
 ```
 AML Registry (model, version, lineage)
@@ -126,7 +126,7 @@ The thing that makes this a *system* and not a pile of jobs:
    deployed dataset centroid) and **uncertainty** (predictive entropy + an OOD score from
    the deployed model's penultimate features).
 2. Frames above threshold are queued for priority upload. The threshold is a **device-twin
-   desired property** — the cloud can retune what the fleet finds interesting without a
+   desired property**: the cloud can retune what the fleet finds interesting without a
    software deployment.
 3. Uploaded frames land in `/raw`, get curated, and are routed to the labeling queue with
    a `reason` tag (`novel`, `uncertain`, `disagreement`, `safety-event`, `disengagement`).

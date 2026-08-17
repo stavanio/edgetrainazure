@@ -1,4 +1,4 @@
-// B7 — devices within two releases of current.
+// B7, devices within two releases of current.
 declare query_parameters(window:timespan = 28d, tolerance:int = 2);
 let current = toscalar(
   ModelRegistry_CL | where stage_s == "Production" | summarize max(version_d));

@@ -1,5 +1,5 @@
 ###############################################################################
-# Edge plane — IoT Hub, DPS, ACR, and the routing that feeds the drift monitors
+# Edge plane: IoT Hub, DPS, ACR, and the routing that feeds the drift monitors
 ###############################################################################
 
 resource "azurerm_container_registry" "main" {
@@ -66,7 +66,7 @@ resource "azurerm_role_assignment" "rollout_acr_pull" {
 }
 
 ###############################################################################
-# IoT Hub — telemetry and twins only. MCAP payload goes direct to ADLS.
+# IoT Hub: telemetry and twins only. MCAP payload goes direct to ADLS.
 ###############################################################################
 
 resource "azurerm_iothub" "main" {
@@ -164,7 +164,7 @@ resource "azurerm_iothub_route" "drift" {
 }
 
 ###############################################################################
-# DPS — zero-touch provisioning with TPM attestation
+# DPS: zero-touch provisioning with TPM attestation
 ###############################################################################
 
 resource "azurerm_iothub_dps" "main" {

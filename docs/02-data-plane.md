@@ -1,12 +1,12 @@
-# 02 — Data plane
+# 02: Data plane
 
 > **Design artifact.** This describes an architecture that has not been deployed.
-> Figures are design targets and planning assumptions, not measurements —
+> Figures are design targets and planning assumptions, not measurements,
 > see the status table in the [README](../README.md).
 
 ## 2.1 On-robot capture and triage
 
-The robot never uploads everything. It cannot — 180 GB/shift against a shared surface link
+The robot never uploads everything. It cannot, 180 GB/shift against a shared surface link
 that the whole site contends for.
 
 The `curator` module ([`src/edge_modules/curator/`](../src/edge_modules/curator)) maintains a
@@ -14,14 +14,14 @@ The `curator` module ([`src/edge_modules/curator/`](../src/edge_modules/curator)
 
 | Tier | Trigger | Retention | Upload priority |
 |---|---|---|---|
-| **T0 — event** | Safety stop, operator disengagement, planner fault, e-stop | Permanent, ±30 s window | Immediate, blocking |
-| **T1 — interesting** | Novelty or uncertainty above twin threshold | 7 days | High, on next link |
-| **T2 — background** | Deterministic sample, 1 frame / 4 s / camera | 24 h | Low, best effort |
+| **T0, event** | Safety stop, operator disengagement, planner fault, e-stop | Permanent, ±30 s window | Immediate, blocking |
+| **T1, interesting** | Novelty or uncertainty above twin threshold | 7 days | High, on next link |
+| **T2, background** | Deterministic sample, 1 frame / 4 s / camera | 24 h | Low, best effort |
 
 Everything else is dropped at the ring buffer. The design sizes retained volume at
 **~2.1 GB/shift/robot**, an 85× reduction, on the assumption that the retained
 fraction is far more informative than a uniform sample. That assumption is the
-one to validate first on real data — the whole cost model rests on it.
+one to validate first on real data; the whole cost model rests on it.
 
 Scoring runs on the same Orin that runs perception, in the gap between inference frames:
 
@@ -34,7 +34,7 @@ priority = w_e · H(p)              # predictive entropy of the deployed head
 ```
 
 Weights `w_*`, the thresholds, and the centroid `C` are all **device-twin desired
-properties**. Retuning fleet-wide curiosity is a twin patch, not a deployment — this
+properties**. Retuning fleet-wide curiosity is a twin patch, not a deployment; this
 matters enormously when a new failure mode appears and you need the fleet hunting for it
 by end of shift.
 
@@ -52,8 +52,8 @@ cost). The `curator` requests a short-lived, path-scoped **user-delegation SAS**
 Function App that authorizes on device identity, then does a block-blob upload with
 resumable chunking. The device holds no storage credential, ever.
 
-**Backfill → Azure Data Box.** When a site's retained volume outruns its uplink — common
-during commissioning, when everything is novel — a Data Box ships. The landing path and
+**Backfill → Azure Data Box.** When a site's retained volume outruns its uplink (common
+during commissioning, when everything is novel) a Data Box ships. The landing path and
 manifest format are identical, so nothing downstream knows the difference.
 
 Upload is idempotent and content-addressed: `sha256` of the shard is the blob name suffix,
@@ -74,7 +74,7 @@ abfss://raw@<account>.dfs.core.windows.net/
 
 Partitioned for the queries that actually get run: "everything from site alpha last week",
 "all T0 events fleet-wide", "this robot's last 30 days". `/raw` has an **immutability
-policy** (time-based retention, 7 years, legal-hold capable) — it is evidence.
+policy** (time-based retention, 7 years, legal-hold capable); it is evidence.
 
 ## 2.3 Medallion zones
 
@@ -86,10 +86,10 @@ policy** (time-based retention, 7 years, legal-hold capable) — it is evidence.
 | `/labeled` | Delta + COCO/mask sidecars | labeling + `labeling.merge` | Has ground truth, has provenance |
 | `/snapshot` | Delta deep clone, read-only | `curation.snapshot` | Frozen, content-addressed, immutable |
 
-### `/clean` — quality gates
+### `/clean`: quality gates
 
 [`src/edgeforge/curation/quality_gates.py`](../src/edgeforge/curation/quality_gates.py).
-Rejection is logged with a reason, never silent — the rejection-rate time series is itself
+Rejection is logged with a reason, never silent; the rejection-rate time series is itself
 a fleet health signal (a camera going soft shows up here weeks before anyone notices).
 
 | Gate | Metric | Reject when | Assumed rate |
@@ -104,7 +104,7 @@ a fleet health signal (a camera going soft shows up here weeks before anyone not
 Dust occlusion is the domain-specific one and it matters: a naive pipeline trains happily
 on frames a human could not interpret, and the model learns to be confident in a whiteout.
 
-### `/curated` — dedupe and stratify
+### `/curated`: dedupe and stratify
 
 [`src/edgeforge/curation/dedupe_and_sample.py`](../src/edgeforge/curation/dedupe_and_sample.py).
 
@@ -114,15 +114,15 @@ on frames a human could not interpret, and the model learns to be confident in a
    at 60–70% of what survives quality gates.
 2. **Stratification against the scenario taxonomy.** Every frame is tagged with
    `(illumination, dust_level, surface_class, geometry_class, personnel_present, machine_present)`.
-   The sampler enforces per-cell floors so that rare-but-critical cells — *personnel present,
-   high dust, low light* — are never sampled out just because they are rare. This is where
+   The sampler enforces per-cell floors so that rare-but-critical cells (*personnel present,
+   high dust, low light*) are never sampled out just because they are rare. This is where
    most naive pipelines quietly fail: uniform sampling produces a dataset whose distribution
    matches the fleet's, and the fleet mostly drives down empty, well-lit main drifts.
 3. **PII redaction.** Face and high-vis-vest-number blurring, applied before any human sees
    a frame, non-reversibly in `/curated`. The unblurred original stays in `/raw` under
    access control. Required for works-council and GDPR sign-off at EU sites.
 
-### `/snapshot` — the thing you actually train on
+### `/snapshot`: the thing you actually train on
 
 A training run never reads a live table. `curation.snapshot` performs a Delta **deep clone**
 into `/snapshot/<dataset>/<version>/`, computes a Merkle root over the file list, registers
@@ -138,13 +138,13 @@ archaeology project.
 |---|---|---|---|---|
 | `/raw` T0 | 90 d | 1 y | 7 y | never |
 | `/raw` T1 | 30 d | 180 d | 2 y | 2 y |
-| `/raw` T2 | 7 d | 30 d | — | 30 d |
-| `/clean` | 30 d | — | — | 90 d (rederivable) |
-| `/curated` | live | — | — | never |
+| `/raw` T2 | 7 d | 30 d | - | 30 d |
+| `/clean` | 30 d | - | (| 90 d (rederivable) |
+| `/curated` | live | - |) | never |
 | `/snapshot` | live | 1 y | 5 y | never |
 
 `/clean` is disposable by design: it is a pure function of `/raw` plus pinned code, so it
-is cheaper to recompute than to store. `/curated` and `/snapshot` are not — they contain
+is cheaper to recompute than to store. `/curated` and `/snapshot` are not; they contain
 human labeling effort and irreproducible sampling decisions.
 
 See [`docs/07-cost-model.md`](07-cost-model.md) for the modeled cost of this retention policy.

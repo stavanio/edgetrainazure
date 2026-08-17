@@ -1,7 +1,7 @@
-# 06 — SLIs, SLOs, telemetry, and dashboards
+# 06: SLIs, SLOs, telemetry, and dashboards
 
 > **Design artifact.** This describes an architecture that has not been deployed.
-> Figures are design targets and planning assumptions, not measurements —
+> Figures are design targets and planning assumptions, not measurements,
 > see the status table in the [README](../README.md).
 
 Everything in this document exists to answer three questions without anyone having
@@ -41,10 +41,10 @@ Everything else below is a genuine SLO with a genuine error budget.
 ## 6.2 The SLI catalogue
 
 25 indicators in four groups: 4 safety invariants (§6.1) and 21 service-level
-objectives. Each has a precise numerator and denominator — "availability" with an
+objectives. Each has a precise numerator and denominator, "availability" with an
 unstated denominator is not an SLI.
 
-### Group A — Safety (invariants, §6.1)
+### Group A: Safety (invariants, §6.1)
 
 | ID | Indicator | Measurement |
 |---|---|---|
@@ -53,7 +53,7 @@ unstated denominator is not an SLI.
 | `A3` | Safety envelope violations | Count, attributed to perception |
 | `A4` | Golden-set isolation | Role assignments on the golden account |
 
-### Group B — Fleet reliability
+### Group B: Fleet reliability
 
 | ID | Indicator | Good event / valid event | SLO | Window |
 |---|---|---|---|---|
@@ -65,7 +65,7 @@ unstated denominator is not an SLI.
 | `B6` | Rollback latency | Rollbacks completing ≤ 5 min / rollbacks initiated | **99.0%** | 90 d |
 | `B7` | Model freshness | Devices within 2 releases of current / devices in fleet | **95.0%** | 28 d |
 
-### Group C — Pipeline health
+### Group C: Pipeline health
 
 | ID | Indicator | Good event / valid event | SLO | Window |
 |---|---|---|---|---|
@@ -77,11 +77,11 @@ unstated denominator is not an SLI.
 | `C6` | Gate evidence completeness | Releases with full slice + closed-loop evidence / releases | **100%** | 90 d |
 | `C7` | Loop time | Loops completing ≤ 11 days / loops completed | **80.0%** | 90 d |
 
-### Group D — Efficiency and unit economics
+### Group D: Efficiency and unit economics
 
 These are **efficiency SLIs**: same structure, same error budgets, but the
 consequence of a breach is a cost conversation rather than an incident. They are
-on the same dashboards as everything else deliberately — separating "is it working"
+on the same dashboards as everything else deliberately, separating "is it working"
 from "what does it cost" is how platforms quietly become unaffordable.
 
 | ID | Indicator | Definition | Objective | Window |
@@ -116,7 +116,7 @@ of 14.4 exhausts it in 2% of the window.
 
 Single-threshold alerting on an SLI is either too noisy or too slow. `edgeforge`
 uses the standard two-tier scheme, with both a long and a short window required
-to fire — the short window is what stops an alert from persisting long after the
+to fire; the short window is what stops an alert from persisting long after the
 problem has resolved.
 
 | Severity | Burn rate | Long window | Short window | Budget consumed | Action |
@@ -144,10 +144,10 @@ This is a policy, not a suggestion, and it is encoded in
 
 ## 6.4 The telemetry data model
 
-Three streams. Each has a fixed, versioned contract — adding a field is additive
+Three streams. Each has a fixed, versioned contract, adding a field is additive
 and safe, changing a field's meaning is a version bump.
 
-### Stream 1 — fleet health (`kind: health`, every 30 s, per robot)
+### Stream 1: fleet health (`kind: health`, every 30 s, per robot)
 
 Routed IoT Hub → Event Hubs → Log Analytics as `FleetHealth_CL`. This is the
 stream every fleet SLI and every rollback predicate reads.
@@ -159,11 +159,11 @@ stream every fleet SLI and every rollback predicate reads.
   "bundle": "hazard-seg:41-orin-agx-64-jp6.0", "release_id": "8821-1",
   "ts": 1755400000,
 
-  // B2, B3 — latency and completeness
+  // B2, B3, latency and completeness
   "inference_p50_ms": 21.4, "inference_p99_ms": 38.9,
   "frames_captured": 1200, "frames_inferred": 1198, "dropped_frames_pct": 0.02,
 
-  // B1, B4 — availability and thermal headroom
+  // B1, B4, availability and thermal headroom
   "operating_seconds": 30, "detecting_seconds": 30,
   "power_w_avg": 33.1, "soc_temp_c": 71.2, "throttled_pct": 0.0,
 
@@ -171,10 +171,10 @@ stream every fleet SLI and every rollback predicate reads.
   "detections_per_km": {"personnel": 0.31, "machine": 2.04, "hazard": 1.77},
   "mean_confidence": 0.83, "ood_rate": 0.011,
 
-  // A1, A3 — invariants
+  // A1, A3, invariants
   "safety_envelope_violations": 0, "disengagements": 0,
 
-  // D3 — uplink yield numerator source
+  // D3, uplink yield numerator source
   "queue_depth": 42, "uploaded_frames": 310, "retained_frames": 128
 }
 ```
@@ -184,13 +184,13 @@ per-class dimension. Telemetry cost scales with cardinality × fleet size, and a
 unbounded label is how an observability bill quietly overtakes a training bill.
 High-cardinality detail belongs in the drift sketch, sampled.
 
-### Stream 2 — drift sketch (`kind: drift_sketch`, every 30 s, per robot)
+### Stream 2: drift sketch (`kind: drift_sketch`, every 30 s, per robot)
 
 Routed IoT Hub → ADLS as Avro, batched every 5 minutes. Distribution *shape*, not
-raw predictions — it must be small enough to send continuously from the whole
+raw predictions; it must be small enough to send continuously from the whole
 fleet. Consumed by the drift monitors and the `D3` uplink-yield calculation.
 
-### Stream 3 — pipeline events (`kind: pipeline_event`, per stage transition)
+### Stream 3: pipeline events (`kind: pipeline_event`, per stage transition)
 
 Emitted by every AML job, curation run, gate evaluation, build, and rollout.
 One event per stage transition, correlated by `release_id` and `loop_id`. This is
@@ -218,7 +218,7 @@ Three, provisioned as code in [`observability/dashboards/`](../observability/das
 and deployed to Azure Managed Grafana by Terraform. Each answers exactly one of
 the three questions at the top of this document.
 
-### `fleet-health` — is the fleet safe right now?
+### `fleet-health`: is the fleet safe right now?
 
 Audience: on-call, ops supervisors. Refresh 1 m.
 
@@ -228,12 +228,12 @@ availability, devices on intended bundle, active rollbacks. Below that:
 latency p99 by ring over time, personnel detections per km against the ring
 baseline band, thermal headroom by site, and an OOD-rate small-multiple per site.
 
-Series are colored by **ring** — the same ring keeps the same color no matter how
+Series are colored by **ring**: the same ring keeps the same color no matter how
 the filter changes, so canary is never repainted when pilot drops out of view.
 Threshold and status marks use the reserved status palette and always carry a
 label, never color alone.
 
-### `pipeline-health` — is the loop turning?
+### `pipeline-health`: is the loop turning?
 
 Audience: platform and ML teams. Refresh 5 m.
 
@@ -245,11 +245,11 @@ label-queue depth and age, curation job success, and the reproducibility canary.
 The funnel is the panel that answers "where is it stuck" at a glance, which is the
 question the runbook's P4 playbook starts from.
 
-### `efficiency` — what does it cost, and which way is it going?
+### `efficiency`: what does it cost, and which way is it going?
 
 Audience: engineering leadership, finance. Refresh 1 h.
 
-Hero number is **cost per robot-month** with its 90-day trend — the number that
+Hero number is **cost per robot-month** with its 90-day trend; the number that
 goes in a board pack. Around it: cost per labeled frame, cost per production
 release, auto-accept rate against its 70% objective, GPU utilization, spot share,
 and a spend breakdown by stage over time.

@@ -1,5 +1,5 @@
 ###############################################################################
-# edgeforge — core scaffolding: resource group, naming, identities, network
+# edgeforge core scaffolding: resource group, naming, identities, network
 ###############################################################################
 
 data "azurerm_client_config" "current" {}
@@ -25,7 +25,7 @@ resource "azurerm_resource_group" "main" {
 }
 
 ###############################################################################
-# Managed identities — one per workload. Nothing in this platform holds a secret.
+# Managed identities: one per workload. Nothing in this platform holds a secret.
 ###############################################################################
 
 resource "azurerm_user_assigned_identity" "train" {
@@ -64,7 +64,7 @@ resource "azurerm_user_assigned_identity" "sas_broker" {
 }
 
 ###############################################################################
-# Network — spoke VNet, no public egress from ML compute
+# Network: spoke VNet, no public egress from ML compute
 ###############################################################################
 
 resource "azurerm_virtual_network" "main" {

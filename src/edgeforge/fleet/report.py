@@ -1,8 +1,8 @@
-"""`make slo-report` — evaluate every indicator and print the release posture.
+"""`make slo-report`: evaluate every indicator and print the release posture.
 
 Runs each SLI's KQL against Log Analytics, evaluates it against the catalogue,
 and prints the roll-up. Also writes the results back as `SloStatus_CL`, which is
-what the dashboards' status tables read — so the number on a dashboard and the
+what the dashboards' status tables read, so the number on a dashboard and the
 number in this report can never disagree.
 
 Exit code is the posture: 0 ship, 1 constrained, 2 freeze. That makes it usable

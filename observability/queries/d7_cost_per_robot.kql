@@ -1,4 +1,4 @@
-// D7 — the board number. Objective is a DIRECTION, not a level: the absolute
+// D7; the board number. Objective is a DIRECTION, not a level: the absolute
 // figure depends on fleet size, so a threshold would be meaningless. The claim
 // under test is that unit economics improve as the fleet grows.
 // Returns a daily series; slo.py fits the regression slope.

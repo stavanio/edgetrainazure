@@ -1,7 +1,7 @@
-// B5 — did devices converge on the bundle the rollout intended?
+// B5 (did devices converge on the bundle the rollout intended?
 // Denominator is devices that were ONLINE and had the opportunity to converge.
 // Twin desired-state is convergent, so a device that was underground during the
-// rollout is not a failure — it converges when it surfaces.
+// rollout is not a failure) it converges when it surfaces.
 declare query_parameters(window:timespan = 28d, settle:timespan = 4h);
 let intended = RolloutEvents_CL
   | where TimeGenerated > ago(window)

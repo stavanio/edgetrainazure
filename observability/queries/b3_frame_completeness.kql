@@ -1,4 +1,4 @@
-// B3 — frames that reached inference vs frames the sensors produced.
+// B3, frames that reached inference vs frames the sensors produced.
 declare query_parameters(window:timespan = 28d);
 FleetHealth_CL
 | where TimeGenerated > ago(window)

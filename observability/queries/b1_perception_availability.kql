@@ -1,4 +1,4 @@
-// B1 — perception availability. Denominator is time OPERATING, not wall-clock:
+// B1, perception availability. Denominator is time OPERATING, not wall-clock:
 // a parked robot is not unavailable, and counting it would flatter the number.
 declare query_parameters(window:timespan = 28d, ring:string = "*");
 FleetHealth_CL

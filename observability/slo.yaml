@@ -1,4 +1,4 @@
-# SLI/SLO catalogue — the single source of truth.
+# SLI/SLO catalogue: the single source of truth.
 #
 # Consumed by:
 #   src/edgeforge/fleet/slo.py        evaluation, error budgets, burn rate, posture

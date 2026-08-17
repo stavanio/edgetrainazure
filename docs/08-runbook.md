@@ -1,7 +1,7 @@
-# 08 — Runbook
+# 08: Runbook
 
 > **Design artifact.** This describes an architecture that has not been deployed.
-> Figures are design targets and planning assumptions, not measurements —
+> Figures are design targets and planning assumptions, not measurements,
 > see the status table in the [README](../README.md).
 
 ## 8.1 The 11-day loop, where the time goes
@@ -25,8 +25,8 @@ fleet":
 | 9–11 | Pilot ring, 3 shifts | ops | ⚠️ supervised |
 | 11 | Production rollout | ops | ⚠️ 2-person approval |
 
-Nine of eleven days are automated. The two human steps — adjudication and promotion review
-— are deliberately human and should stay that way. If the loop is running long, the fix is
+Nine of eleven days are automated. The two human steps, adjudication and promotion review
+, are deliberately human and should stay that way. If the loop is running long, the fix is
 almost always adjudication queue depth, not compute.
 
 ## 8.2 Common operations
@@ -39,7 +39,7 @@ make snapshot DATASET=mr1-hazard NOTE="add site-delta wet-decline frames"
 ```
 
 Check the coverage report before training. If a taxonomy cell fell below its floor, the
-sampler will say so — training on it anyway produces a model that fails that slice gate at
+sampler will say so, training on it anyway produces a model that fails that slice gate at
 day 6 and wastes the cycle.
 
 ### Train
@@ -50,7 +50,7 @@ make train MODEL=hazard-seg DATASET=mr1-hazard:12 SWEEP=1   # HPO, low-priority 
 ```
 
 Follow in MLflow. A run that has not improved validation loss by step 4,000 is almost always
-a data problem, not a hyperparameter one — kill it and look at the snapshot.
+a data problem, not a hyperparameter one, kill it and look at the snapshot.
 
 ### Inspect why a gate failed
 
@@ -88,7 +88,7 @@ make rollback RING=production BUNDLE=hazard-seg:40   # to a specific version
 ```
 
 Automatic rollback fires on the predicates in [`docs/04-edge-plane.md`](04-edge-plane.md).
-The manual command exists for the cases a metric does not catch — an operator saying "it
+The manual command exists for the cases a metric does not catch; an operator saying "it
 feels wrong" is a valid reason and does not need justification at the time.
 
 ### Retune fleet curiosity without deploying
@@ -104,7 +104,7 @@ is full.
 
 ## 8.3 Incident playbooks
 
-### P1 — Missed personnel detection reported in the field
+### P1: Missed personnel detection reported in the field
 
 1. **Stop the rollout.** `make rollout-freeze` halts all ring advancement fleet-wide.
 2. **Do not roll back yet.** Determine whether the incumbent is also affected. If it is, the
@@ -117,7 +117,7 @@ is full.
 7. Post-incident: the gate that should have caught this either did not exist or was not
    sensitive enough. Fix the gate before fixing the model.
 
-### P2 — Fleet-wide OOD spike
+### P2: Fleet-wide OOD spike
 
 Usually physical, not model: new equipment, changed lighting, a re-muck, a new drift.
 
@@ -127,39 +127,39 @@ Usually physical, not model: new equipment, changed lighting, a re-muck, a new d
    of the time.
 3. If environmental: lower the novelty threshold for that site, let the fleet collect, and
    schedule a retrain. No rollback needed.
-4. If release-related: rollback, then investigate calibration/preprocessing skew first —
+4. If release-related: rollback, then investigate calibration/preprocessing skew first,
    it is the most common cause.
 
-### P3 — Latency regression after deployment
+### P3: Latency regression after deployment
 
 1. Check `throttled_pct` before anything else. A thermal problem masquerading as a model
    problem is common, especially at ambient extremes.
 2. Compare HIL-measured p99 against field p99. A gap means the concurrent-load profile on
-   the HIL rack no longer matches the robot — fix the HIL load generator, because every
+   the HIL rack no longer matches the robot, fix the HIL load generator, because every
    future measurement is wrong until you do.
 3. If genuinely the model: rollback, then re-examine DLA placement and the FP16 fallback
    layer list.
 
-### P4 — Ingest backlog
+### P4: Ingest backlog
 
 1. Check queue depth per site in Grafana. A single site → site link problem.
 2. Raise the curator threshold temporarily to shed T2 traffic; T0 is never shed.
 3. If sustained > 72 h, order a Data Box for that site. Do not let the ring buffer overwrite
-   T1 frames that were scored interesting — that is silently losing the most valuable data in
+   T1 frames that were scored interesting; that is silently losing the most valuable data in
    the system.
 
 ## 8.4 Standing maintenance
 
 | Cadence | Task | Why |
 |---|---|---|
-| Weekly | Reproducibility canary — re-run a fixed job, compare metrics | Catches environment drift before it invalidates a release |
+| Weekly | Reproducibility canary (re-run a fixed job, compare metrics | Catches environment drift before it invalidates a release |
 | Weekly | Annotator κ review on calibration set | Label quality degrades silently |
 | Monthly | Golden-set growth review | It must grow with the ODD, or the gates go stale |
 | Monthly | Rejection-rate trend per camera per robot | Earliest hardware-degradation signal available |
 | Quarterly | **Rollback rehearsal on a live ring** | An untested rollback is not a rollback |
 | Quarterly | Cost review against `docs/07-cost-model.md` | Drift is normal; surprise is not |
 | Quarterly | Trust-store and certificate rotation review | |
-| Annually | Full lineage audit — pick a deployed model, reconstruct it from `/snapshot` | This is the claim the safety case rests on |
+| Annually | Full lineage audit) pick a deployed model, reconstruct it from `/snapshot` | This is the claim the safety case rests on |
 
 ## 8.5 Things that will bite you
 

@@ -1,7 +1,7 @@
-# 06 — Security and governance
+# 06: Security and governance
 
 > **Design artifact.** This describes an architecture that has not been deployed.
-> Figures are design targets and planning assumptions, not measurements —
+> Figures are design targets and planning assumptions, not measurements,
 > see the status table in the [README](../README.md).
 
 The threat model here is not "someone reads our training data." It is **"someone changes
@@ -12,16 +12,16 @@ that.
 
 | # | Threat | Impact | Control |
 |---|---|---|---|
-| T1 | Unauthorized model on a robot | Catastrophic — arbitrary perception behaviour | Notation signature verified on device; unsigned bundle refused |
-| T2 | Poisoned training data | Severe — latent, triggered failure | Immutable `/raw`, device-attested provenance, label audit, slice gates |
+| T1 | Unauthorized model on a robot | Catastrophic, arbitrary perception behaviour | Notation signature verified on device; unsigned bundle refused |
+| T2 | Poisoned training data | Severe, latent, triggered failure | Immutable `/raw`, device-attested provenance, label audit, slice gates |
 | T3 | Compromised build pipeline | Catastrophic | SLSA provenance, HSM signing keys, protected branches, 2-person promotion |
-| T4 | Stolen device identity | Moderate — false data injection | TPM-attested DPS enrollment, per-device X.509, short-lived SAS only |
-| T5 | Model exfiltration | Moderate — IP loss | Private endpoints, no public egress, ACR content trust, encrypted at rest |
-| T6 | Test-set leakage | Severe — invalid safety evidence | Golden set in a separate container, IAM-denied to training compute |
-| T7 | Twin manipulation | Severe — forced bad rollout | Twin write restricted to the rollout service principal; all patches audited |
+| T4 | Stolen device identity | Moderate, false data injection | TPM-attested DPS enrollment, per-device X.509, short-lived SAS only |
+| T5 | Model exfiltration | Moderate, IP loss | Private endpoints, no public egress, ACR content trust, encrypted at rest |
+| T6 | Test-set leakage | Severe, invalid safety evidence | Golden set in a separate container, IAM-denied to training compute |
+| T7 | Twin manipulation | Severe, forced bad rollout | Twin write restricted to the rollout service principal; all patches audited |
 | T8 | PII exposure | Regulatory | Blur before human access; unblurred originals access-controlled and logged |
 
-## 6.2 Identity — nothing has a password
+## 6.2 Identity: nothing has a password
 
 There are no connection strings, storage keys, or service-principal secrets anywhere in this
 repository or in any deployed configuration.
@@ -37,7 +37,7 @@ repository or in any deployed configuration.
 | Rollout driver | MI `mi-rollout` | IoT Hub twin write; ACR read |
 | Robot | X.509 leaf, TPM-bound, per device | IoT Hub D2C; SAS request only |
 
-Human access is Entra ID PIM — no standing privilege on `prod`. Elevation is time-boxed,
+Human access is Entra ID PIM, no standing privilege on `prod`. Elevation is time-boxed,
 justified, approved, and logged.
 
 ## 6.3 Network
@@ -75,8 +75,8 @@ source → build → sign → verify → run
 ## 6.5 Data governance
 
 **Residency.** Each site's `/raw` is written to a storage account in the geography that site
-requires. Curation and training run in-geo. Only model weights — which contain no
-recoverable imagery — cross geographies, and only after a documented review.
+requires. Curation and training run in-geo. Only model weights (which contain no
+recoverable imagery) cross geographies, and only after a documented review.
 
 **PII.** Faces and identifying markings are blurred irreversibly at `/curated`. Unblurred
 `/raw` access requires PIM elevation with a stated purpose; every read is logged to an
@@ -84,12 +84,12 @@ immutable audit table. Works-council agreements at EU sites are satisfied by the
 the routine ML workflow *never* touches unblurred data.
 
 **Right to erasure.** Personnel can request removal. `/raw` immutability and erasure conflict;
-resolved by cryptographic erasure — per-subject keys for the identifying crops, destroyed on
+resolved by cryptographic erasure, per-subject keys for the identifying crops, destroyed on
 request, leaving the frame present but the identity unrecoverable. Documented in the DPIA.
 
 **Lineage.** Purview plus AML Registry answers, for any deployed model, in one query:
 which snapshot, which frames, which labelers, which code SHA, which environment digest,
-which gates, which approvers, which robots ran it and when. This is not a nice-to-have —
+which gates, which approvers, which robots ran it and when. This is not a nice-to-have,
 it is the artifact an incident investigation or a regulator asks for.
 
 ## 6.6 Safety-adjacent governance

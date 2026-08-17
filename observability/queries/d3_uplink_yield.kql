@@ -1,4 +1,4 @@
-// D3 — is on-robot triage choosing well? A falling yield means the fleet is
+// D3, is on-robot triage choosing well? A falling yield means the fleet is
 // uploading things the cloud then discards: retune the twin thresholds before
 // anyone proposes buying more uplink.
 declare query_parameters(window:timespan = 28d);

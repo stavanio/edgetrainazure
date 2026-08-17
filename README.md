@@ -1,4 +1,4 @@
-# edgetrainazure — `edgeforge`
+# edgetrainazure: `edgeforge`
 
 **A reference architecture for an end-to-end AI training and deployment platform on
 Microsoft Azure, for a fleet of autonomous, edge-inferencing field robots.**
@@ -18,13 +18,13 @@ measurement. Read the table below before reading anything else.
 | **Specified, never executed** | Infrastructure and delivery definitions that are complete and internally consistent, but have never been applied or deployed. `terraform validate` runs in CI; `terraform apply` has never been run. | `infra/`, `pipelines/aml/`, `deploy/`, `observability/dashboards/`, `observability/queries/`, `.github/workflows/` |
 | **Interface only** | Real structure and control flow, with device- and storage-facing calls left as explicit `NotImplementedError` hooks. The training loop, ONNX/TensorRT build, and bundle assembly are shaped correctly but not runnable end to end. | `src/edgeforge/{training,optimize,packaging}` |
 | **Modeled** | Cost figures, SLO targets, and pipeline ratios. Derived from public Azure list pricing and published results for comparable perception workloads. **Illustrative planning assumptions, not observations.** | `docs/07-cost-model.md`, `observability/slo.yaml` |
-| **Not built** | The hardware-in-the-loop rack, an Azure deployment, a robot fleet, a labeling workforce, a safety case. | — |
+| **Not built** | The hardware-in-the-loop rack, an Azure deployment, a robot fleet, a labeling workforce, a safety case. | - |
 
 ### What that means for the numbers
 
 Where this document says a rejection rate is 6%, an auto-accept rate is 71%, or
 the platform costs $66k/month, those are **assumptions used to size the design
-and test whether it hangs together** — the kind of figure you would put in a
+and test whether it hangs together**: the kind of figure you would put in a
 planning doc and then go validate. They are stated precisely because a vague
 assumption cannot be checked or argued with, not because they have been observed.
 
@@ -42,7 +42,7 @@ section is the engineering detail.*
 ### What it is
 
 A closed-loop system that turns what a robot sees in the field into better
-software on that robot — continuously, safely, and at falling unit cost. It is
+software on that robot, continuously, safely, and at falling unit cost. It is
 an assembly line for models: instrumented end to end, gated at every stage, with
 an undo button.
 
@@ -64,19 +64,19 @@ Three constraints make this hard, and they drive every design decision:
 ### How it works, in four steps
 
 1. **The robot triages.** Each machine scores what it sees for novelty and
-   uncertainty and keeps only what is genuinely new — roughly a **250× reduction**
+   uncertainty and keeps only what is genuinely new, roughly a **250× reduction**
    before anything reaches a human. Safety events are always kept.
 2. **A large "teacher" model pre-labels.** Humans adjudicate only the images
-   where the teacher and the currently-deployed model disagree — modeled at ~18%.
+   where the teacher and the currently-deployed model disagree, modeled at ~18%.
    This is the design's biggest cost lever: on the modeled assumptions it moves
    annotation from ~$200k/month to ~$25k/month.
 3. **Training is followed by gating.** A new model must beat the incumbent not
-   just on average, but **in every operating condition** — and must record zero
+   just on average, but **in every operating condition**, and must record zero
    missed personnel in a 2,000-scenario replay suite. No gate, no release. The
    gates generate safety-case evidence as a by-product.
 4. **Release is ringed, and reversible.** Two robots, then one site, then the
    fleet. Live health metrics are watched continuously, and a bad release rolls
-   back automatically in minutes — without needing a network connection to the
+   back automatically in minutes, without needing a network connection to the
    robot, because the previous version never leaves the machine.
 
 ### What it costs, and why that improves
@@ -88,21 +88,21 @@ Three constraints make this hard, and they drive every design decision:
 
 On these assumptions cost per robot falls **~3.4× from 40 to 400 machines.** The
 reasoning behind that, which matters more than the figure: a ten-times-larger fleet
-does not see ten times more *novel* situations — it sees the same world more
+does not see ten times more *novel* situations; it sees the same world more
 often. The on-robot triage converts that redundancy into savings rather than
 storage bills. This is the core economic argument: **the platform gets cheaper per
 unit as the fleet grows, and the models get better at the same time.**
 
 ### How it is measured
 
-The platform reports against **25 indicators** in four groups — 4 safety
+The platform reports against **25 indicators** in four groups, 4 safety
 invariants plus 21 service-level objectives across fleet reliability, pipeline
 health, and efficiency, each with an explicit objective and an error budget.
 Three dashboards make this visible without anyone having to ask:
 
-- **Fleet Health** — is the deployed model behaving, right now, per ring and site
-- **Pipeline Health** — is the loop turning, and where is it stalled
-- **Efficiency & Unit Economics** — cost per labeled frame, cost per release, cost
+- **Fleet Health**: is the deployed model behaving, right now, per ring and site
+- **Pipeline Health**: is the loop turning, and where is it stalled
+- **Efficiency & Unit Economics**: cost per labeled frame, cost per release, cost
   per robot-month, GPU utilization, all trending
 
 Four indicators are **invariants, not targets**: they have no error budget and a
@@ -111,11 +111,11 @@ of them. Full catalogue in [`docs/06-sli-slo-and-telemetry.md`](docs/06-sli-slo-
 
 ### The headline design targets
 
-Targets the architecture is built to meet — not results it has produced.
+Targets the architecture is built to meet, not results it has produced.
 
 | Measure | Target | Why it matters |
 |---|---|---|
-| Loop time — field condition to full fleet | **≤ 11 days** | Response time to a new hazard |
+| Loop time, field condition to full fleet | **≤ 11 days** | Response time to a new hazard |
 | Missed-personnel events | **0, absolute** | The thing that must never happen |
 | Automatic rollback | **≤ 5 min, no network needed** | Blast radius of a bad release |
 | Labeling auto-accept rate | **≥ 70%** | The single biggest cost lever |
@@ -148,7 +148,7 @@ that trains the models that go back onto the robots that produce better data.
 
 The reference workload is a **Class-4 subterranean haulage & inspection robot**
 (`MR-1`) operating in an underground hard-rock mine. The platform is
-domain-agnostic — the same pipeline runs unchanged for any complex robot whose
+domain-agnostic; the same pipeline runs unchanged for any complex robot whose
 perception stack must be trained centrally and executed at the edge.
 
 Nine stages, each independently runnable, each gated:
@@ -197,7 +197,7 @@ degrades time-to-brake is a regression. Gates in
 
 **Optimization is measured on real silicon.** INT8 quantization error, latency,
 and sustained power are measured on a hardware-in-the-loop rack of the exact
-target module — never estimated from cloud GPU numbers.
+target module, never estimated from cloud GPU numbers.
 
 **Rollout is ringed with automatic rollback.** Canary (2 robots) → pilot (1 site)
 → production, each gated on live fleet health with a twin-driven rollback that
@@ -222,12 +222,12 @@ sim/                     Synthetic data generation scenarios and domain randomiz
 
 Read the docs in order:
 
-1. [`docs/01-architecture.md`](docs/01-architecture.md) — the whole system, one page
-2. [`docs/02-data-plane.md`](docs/02-data-plane.md) — ingest, lake zones, curation
-3. [`docs/03-training-plane.md`](docs/03-training-plane.md) — labeling, sim, training, eval
-4. [`docs/04-edge-plane.md`](docs/04-edge-plane.md) — optimize, package, deploy, feedback
+1. [`docs/01-architecture.md`](docs/01-architecture.md): the whole system, one page
+2. [`docs/02-data-plane.md`](docs/02-data-plane.md): ingest, lake zones, curation
+3. [`docs/03-training-plane.md`](docs/03-training-plane.md): labeling, sim, training, eval
+4. [`docs/04-edge-plane.md`](docs/04-edge-plane.md): optimize, package, deploy, feedback
 5. [`docs/05-security-and-governance.md`](docs/05-security-and-governance.md)
-6. [`docs/06-sli-slo-and-telemetry.md`](docs/06-sli-slo-and-telemetry.md) — SLIs, SLOs, error budgets, dashboards
+6. [`docs/06-sli-slo-and-telemetry.md`](docs/06-sli-slo-and-telemetry.md): SLIs, SLOs, error budgets, dashboards
 7. [`docs/07-cost-model.md`](docs/07-cost-model.md)
 8. [`docs/08-runbook.md`](docs/08-runbook.md)
 
@@ -265,5 +265,5 @@ make rollout BUNDLE=hazard-seg:41 RING=canary
 make slo-report
 ```
 
-Every `make` target is a thin wrapper over an `az ml` / `az iot` call —
+Every `make` target is a thin wrapper over an `az ml` / `az iot` call,
 see the [`Makefile`](Makefile). Nothing is hidden behind bespoke tooling.

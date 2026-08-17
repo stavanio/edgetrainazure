@@ -30,9 +30,9 @@ log = logging.getLogger(__name__)
 class Tier(IntEnum):
     """Retention tier. Lower value == higher priority. T0 is never shed."""
 
-    EVENT = 0  # safety stop, disengagement, planner fault — permanent
-    INTERESTING = 1  # scored above threshold — 7 days
-    BACKGROUND = 2  # deterministic sample — 24 h
+    EVENT = 0  # safety stop, disengagement, planner fault, permanent
+    INTERESTING = 1  # scored above threshold, 7 days
+    BACKGROUND = 2  # deterministic sample, 24 h
     DROP = 3
 
 
@@ -51,7 +51,7 @@ class ScoringWeights:
 
     # Above this the frame is not interesting, it is uninterpretable. Whiteouts
     # are cheap to generate and expensive to store, and they are rejected by the
-    # cloud quality gate anyway — uploading them wastes the uplink twice.
+    # cloud quality gate anyway: uploading them wastes the uplink twice.
     haze_reject_above: float = 0.62
 
 
@@ -98,7 +98,7 @@ def mahalanobis_ood(feature: np.ndarray, ctx: DeployedContext) -> float:
     """Squared Mahalanobis distance, squashed to [0, 1).
 
     Cheaper and more robust on-device than a learned OOD head, and it needs no
-    extra parameters in the shipped engine — the statistics travel in the bundle.
+    extra parameters in the shipped engine; the statistics travel in the bundle.
     """
     d = feature - ctx.feature_mean
     m2 = float(d @ ctx.feature_precision @ d)

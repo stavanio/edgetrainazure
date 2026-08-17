@@ -1,4 +1,4 @@
-// B6 — rollbacks completing within 5 minutes of the twin patch.
+// B6, rollbacks completing within 5 minutes of the twin patch.
 // 90-day window: rollbacks are rare, and a 28-day window swings wildly on a
 // denominator of two.
 declare query_parameters(window:timespan = 90d, budget:timespan = 5m);

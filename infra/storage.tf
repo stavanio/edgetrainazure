@@ -1,5 +1,5 @@
 ###############################################################################
-# Data lake — ADLS Gen2, medallion zones, immutable /raw, isolated golden set
+# Data lake: ADLS Gen2, medallion zones, immutable /raw, isolated golden set
 ###############################################################################
 
 resource "random_string" "sa" {
@@ -183,7 +183,7 @@ resource "azurerm_storage_container" "golden" {
 }
 
 ###############################################################################
-# Role assignments — least privilege, per workload identity
+# Role assignments: least privilege, per workload identity
 ###############################################################################
 
 # Curation reads /raw, writes /clean + /curated. Scoped at container level.

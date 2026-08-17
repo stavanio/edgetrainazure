@@ -1,4 +1,4 @@
-// C4 — the longest pole in the 11-day loop. 90% is deliberately loose:
+// C4; the longest pole in the 11-day loop. 90% is deliberately loose:
 // tightening it buys loop time only if annotator capacity moves with it.
 declare query_parameters(window:timespan = 28d, budget:timespan = 72h);
 LabelQueue_CL

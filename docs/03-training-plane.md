@@ -1,12 +1,12 @@
-# 03 — Training plane
+# 03: Training plane
 
 > **Design artifact.** This describes an architecture that has not been deployed.
-> Figures are design targets and planning assumptions, not measurements —
+> Figures are design targets and planning assumptions, not measurements,
 > see the status table in the [README](../README.md).
 
 ## 3.1 Labeling: teacher-student with human adjudication
 
-Human labeling is the most expensive resource in the loop — roughly 40× the cost per frame
+Human labeling is the most expensive resource in the loop, roughly 40× the cost per frame
 of every compute step combined. The design goal is therefore not "label well" but
 **"label as few frames as possible, and only the ones that matter."**
 
@@ -33,7 +33,7 @@ first thing to establish against a real teacher and a real dataset.
 ```
 
 Auto-accepted labels are **marked as such** in `/labeled` and carry the teacher version.
-They are never used alone to evaluate — the golden set is 100% human, always.
+They are never used alone to evaluate; the golden set is 100% human, always.
 
 The teacher is large, slow, and expensive per frame. That is fine: it runs offline, in
 batch, on a schedule, and it never ships to a robot. Implementation in
@@ -47,7 +47,7 @@ annotator's recent work back into the queue.
 ## 3.2 Synthetic data
 
 Real data cannot cover the tail. There is no ethical way to collect a thousand examples of
-*a person in the wrong place behind a moving haul vehicle in a dust cloud* — and that is
+*a person in the wrong place behind a moving haul vehicle in a dust cloud*, and that is
 exactly the case that must not fail.
 
 [`sim/`](../sim) drives NVIDIA Isaac Sim headless on an Azure Batch spot pool
@@ -93,7 +93,7 @@ run is not.
 ### The student is the product
 
 `hazard-seg` ships as a ~9 M-parameter encoder-decoder with a shared backbone across all
-four heads — one backbone pass, four heads, because 45 ms p99 at 40 W does not permit four
+four heads; one backbone pass, four heads, because 45 ms p99 at 40 W does not permit four
 independent networks. The multi-head arrangement is also a regulariser: personnel detection
 and drivable-surface estimation constrain each other in useful ways.
 
@@ -104,9 +104,9 @@ alignment at two scales. Implementation in
 ### Reproducibility
 
 Every job pins: snapshot Merkle root, git SHA of this repo, environment image digest (not
-tag), CUDA/cuDNN versions, and all seeds. `deterministic=True` costs throughput — budgeted
-at ~12% — and is enabled for `finetune` and `distill`, disabled for sweeps. An AML job can be re-run from its
-recorded inputs and lands within tolerance — this is checked weekly by a canary re-run, not
+tag), CUDA/cuDNN versions, and all seeds. `deterministic=True` costs throughput, budgeted
+at ~12%, and is enabled for `finetune` and `distill`, disabled for sweeps. An AML job can be re-run from its
+recorded inputs and lands within tolerance; this is checked weekly by a canary re-run, not
 assumed.
 
 ## 3.4 Evaluation
@@ -118,15 +118,15 @@ worse at the one thing that hurts someone.
 
 [`src/edgeforge/evaluation/gates.py`](../src/edgeforge/evaluation/gates.py)
 
-**Tier 1 — aggregate.** Overall mAP, mIoU, and calibration (expected calibration error) on
+**Tier 1, aggregate.** Overall mAP, mIoU, and calibration (expected calibration error) on
 the human-only golden set. Must not regress beyond tolerance vs. the incumbent.
 
-**Tier 2 — slices.** The same metrics computed per taxonomy cell. **No slice may regress
+**Tier 2, slices.** The same metrics computed per taxonomy cell. **No slice may regress
 more than 1.5 points, regardless of aggregate movement.** This is the gate that catches
 "improved overall by getting better at easy frames." Slices that matter most:
 `personnel_present × high_dust`, `personnel_present × low_light`, `wet_surface × decline`.
 
-**Tier 3 — closed-loop.** The model is dropped into a replay harness over ~2,000 recorded
+**Tier 3, closed-loop.** The model is dropped into a replay harness over ~2,000 recorded
 and simulated scenarios and scored on *decision* outcomes, not pixels:
 
 | Metric | Meaning | Gate |
@@ -153,7 +153,7 @@ the frame becomes a permanent golden-set member.
 Passing gates does not deploy anything. It registers the model in the **AML Registry** with
 stage `Evaluated` and attaches:
 
-- Model card (auto-generated from gate results —
+- Model card (auto-generated from gate results,
   [`src/edgeforge/packaging/model_card.py`](../src/edgeforge/packaging/model_card.py))
 - Full lineage: snapshot root → job → environment digest → metrics
 - Slice table and closed-loop scores versus incumbent

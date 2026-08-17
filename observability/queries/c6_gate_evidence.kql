@@ -1,4 +1,4 @@
-// C6 — every release must carry complete slice AND closed-loop evidence.
+// C6, every release must carry complete slice AND closed-loop evidence.
 // A release evaluated on aggregates alone is not evidence of anything.
 declare query_parameters(window:timespan = 90d);
 PipelineEvents_CL

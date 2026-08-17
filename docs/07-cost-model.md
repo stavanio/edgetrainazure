@@ -1,7 +1,7 @@
-# 07 — Cost model
+# 07: Cost model
 
 > **Design artifact.** This describes an architecture that has not been deployed.
-> Figures are design targets and planning assumptions, not measurements —
+> Figures are design targets and planning assumptions, not measurements,
 > see the status table in the [README](../README.md).
 
 A **bottom-up cost model**, not a bill. Nothing here has been spent. Figures are built
@@ -10,7 +10,7 @@ workload: **40 robots, 6 sites, 4 model families, ~2 production releases per mon
 
 The purpose is not to predict the invoice to the dollar. It is to find which line dominates,
 establish whether the unit economics work at scale, and identify which assumptions the answer
-is sensitive to — §7.6. Treat every figure as ±30% at best, and the labeling line as the one
+is sensitive to, §7.6. Treat every figure as ±30% at best, and the labeling line as the one
 worth arguing about.
 
 ## 7.1 Modeled monthly run cost
@@ -67,7 +67,7 @@ Other         ██                                             3%
 **Labeling dominates, and it is the line most sensitive to engineering effort.** On these
 assumptions each percentage point of auto-accept rate is roughly $350/month, and the
 teacher-student triage in [`docs/03-training-plane.md`](03-training-plane.md) moves labeling
-from ~$200k/month naive to ~$25k/month — an 8× reduction that comes entirely from *not asking
+from ~$200k/month naive to ~$25k/month; an 8× reduction that comes entirely from *not asking
 humans about frames the system already understands*.
 
 That 8× is the single claim this whole architecture stands or falls on, and it is unverified.
@@ -94,7 +94,7 @@ the flywheel:
 | **Total** | **$66,000** | **$101,000** | **$192,500** |
 | **Per robot** | **$1,650** | **$842** | **$481** |
 
-Storage, ingest, and curation are linear — they track bytes. Labeling, training, and
+Storage, ingest, and curation are linear; they track bytes. Labeling, training, and
 simulation are **sub-linear**, because a 10× larger fleet does not see 10× more *novel*
 things; it sees the same world more times. The curator's novelty scoring is what converts
 that redundancy into cost savings instead of storage bills.
@@ -108,13 +108,13 @@ question about the operating environment, not about the architecture.
 
 1. **Raise auto-accept rate.** Better teacher, better agreement heuristics, active-learning
    query strategy. Highest leverage in the system by a wide margin.
-2. **Tune on-robot thresholds aggressively.** They are twin properties — measure the marginal
+2. **Tune on-robot thresholds aggressively.** They are twin properties (measure the marginal
    value of retained frames per site and tighten where a site has gone stale. Costs nothing
    to change.
 3. **Reserved instances / savings plans on training GPU.** ~35% on the predictable baseline.
    Keep sweeps on low-priority.
 4. **Spot everywhere it is safe.** Simulation and sweeps are fully interruption-tolerant.
-   Never spot the final training run — a preempted 40-hour job costs more than it saves.
+   Never spot the final training run) a preempted 40-hour job costs more than it saves.
 5. **Lifecycle policy discipline.** `/clean` deletion at 90 days and `/raw` T2 at 30 days are
    worth ~$1,100/month and are pure policy.
 6. **Log Analytics commitment tier + sampling.** Telemetry ingest grows with the fleet and is
@@ -125,7 +125,7 @@ question about the operating environment, not about the architecture.
 
 For context, not accounting: the alternative to this pipeline is not "no cost." It is manual
 data handling, ad-hoc labeling, un-versioned models, no gates, and no rollback path. The
-expensive failure mode there is not the cloud bill — it is a model regression discovered by a
+expensive failure mode there is not the cloud bill; it is a model regression discovered by a
 robot rather than by a gate.
 
 ## 7.6 Load-bearing assumptions
@@ -135,10 +135,10 @@ order of how much damage being wrong would do.
 
 | # | Assumption | Value used | If it is wrong | How to establish it |
 |---|---|---|---|---|
-| 1 | **Auto-accept rate** — share of frames the teacher and deployed model agree on confidently | 71% | At 40%, labeling roughly doubles to ~$52k/mo and total cost rises ~36%. The architecture still works; the business case weakens sharply. | Run the teacher over a few thousand real frames against a real incumbent. Cheapest possible experiment, highest information. |
-| 2 | **On-robot triage retention** — fraction of captured frames worth keeping | ~1.2% (85× reduction) | Every storage, ingest, and curation line scales directly. At 5% retention, storage and curation roughly quadruple. | Instrument the curator in shadow mode on one robot for a week; no cloud needed. |
-| 3 | **Cloud dedupe rate** — near-duplicates among quality-passed frames | 60–70% | Feeds straight into labeling volume, compounding with #1. | Offline, on any existing captured dataset. |
-| 4 | **Novelty saturation with fleet size** — a 10× fleet does not see 10× novel situations | Strongly sub-linear | This is the entire per-robot cost curve. If wrong, unit economics stay flat instead of improving 3.4×. | Cannot be established before a multi-site fleet exists. The largest standing risk in the model. |
+| 1 | **Auto-accept rate**: share of frames the teacher and deployed model agree on confidently | 71% | At 40%, labeling roughly doubles to ~$52k/mo and total cost rises ~36%. The architecture still works; the business case weakens sharply. | Run the teacher over a few thousand real frames against a real incumbent. Cheapest possible experiment, highest information. |
+| 2 | **On-robot triage retention**: fraction of captured frames worth keeping | ~1.2% (85× reduction) | Every storage, ingest, and curation line scales directly. At 5% retention, storage and curation roughly quadruple. | Instrument the curator in shadow mode on one robot for a week; no cloud needed. |
+| 3 | **Cloud dedupe rate**: near-duplicates among quality-passed frames | 60–70% | Feeds straight into labeling volume, compounding with #1. | Offline, on any existing captured dataset. |
+| 4 | **Novelty saturation with fleet size**: a 10× fleet does not see 10× novel situations | Strongly sub-linear | This is the entire per-robot cost curve. If wrong, unit economics stay flat instead of improving 3.4×. | Cannot be established before a multi-site fleet exists. The largest standing risk in the model. |
 | 5 | **Annotation unit cost** | ~$0.95/frame adjudicated | Linear on the dominant line. Varies widely by vendor, geography, and task complexity. | Vendor quotes against a representative task spec. |
 
 Assumptions 1–3 are all testable **before any Azure resource is created**, on recorded data

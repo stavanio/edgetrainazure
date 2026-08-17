@@ -1,5 +1,5 @@
 ###############################################################################
-# Observability — one workspace, fleet + pipeline dashboards, rollback alerting
+# Observability: one workspace, fleet + pipeline dashboards, rollback alerting
 ###############################################################################
 
 resource "azurerm_log_analytics_workspace" "main" {
@@ -64,7 +64,7 @@ resource "azurerm_automation_runbook" "rollback" {
 }
 
 ###############################################################################
-# Rollback predicates — see docs/04-edge-plane.md §4.4
+# Rollback predicates: see docs/04-edge-plane.md §4.4
 #
 # Each of these fires the auto-rollback runbook for the affected ring. They are
 # deliberately conservative: a false rollback costs a shift of stale model, a
@@ -222,7 +222,7 @@ resource "azurerm_monitor_scheduled_query_rules_alert_v2" "ood_spike" {
 }
 
 ###############################################################################
-# Grafana — fleet and pipeline dashboards
+# Grafana: fleet and pipeline dashboards
 ###############################################################################
 
 resource "azurerm_dashboard_grafana" "main" {
@@ -254,7 +254,7 @@ resource "azurerm_role_assignment" "grafana_admins" {
 }
 
 ###############################################################################
-# Diagnostics — everything that changes fleet behaviour is logged immutably
+# Diagnostics: everything that changes fleet behaviour is logged immutably
 ###############################################################################
 
 locals {

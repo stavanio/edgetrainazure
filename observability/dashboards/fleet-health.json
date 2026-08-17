@@ -1,6 +1,6 @@
 {
   "uid": "edgeforge-fleet-health",
-  "title": "edgeforge — Fleet Health",
+  "title": "edgeforge, Fleet Health",
   "description": "Is the fleet safe right now? Audience: on-call, ops supervisors. Panels map to SLIs A1-A3 and B1-B5; see docs/06-sli-slo-and-telemetry.md.",
   "tags": ["edgeforge", "fleet", "slo"],
   "timezone": "utc",
@@ -11,7 +11,7 @@
 
   "__comment_color": [
     "Series are coloured by RING, not by rank. A filter that drops 'pilot' must",
-    "not repaint canary — colour follows the entity. Hexes are the validated",
+    "not repaint canary, colour follows the entity. Hexes are the validated",
     "dark-surface categorical slots 1-3 (all-pairs CVD dE 9.4, normal-vision 20.9).",
     "Threshold marks use the reserved status palette and always carry a text",
     "label; status colour never carries meaning alone."
@@ -47,7 +47,7 @@
   "panels": [
     {
       "type": "row",
-      "title": "Safety invariants — no error budget, a single breach freezes releases",
+      "title": "Safety invariants, no error budget, a single breach freezes releases",
       "gridPos": { "h": 1, "w": 24, "x": 0, "y": 0 },
       "collapsed": false
     },
@@ -67,7 +67,7 @@
       "fieldConfig": {
         "defaults": {
           "unit": "short",
-          "mappings": [{ "type": "value", "options": { "0": { "text": "0 — clear", "index": 0 } } }],
+          "mappings": [{ "type": "value", "options": { "0": { "text": "0, clear", "index": 0 } } }],
           "thresholds": {
             "mode": "absolute",
             "steps": [
@@ -90,7 +90,7 @@
     {
       "type": "stat",
       "title": "Perception availability (28 d)",
-      "description": "B1. Denominator is time OPERATING, not wall-clock — a parked robot is not unavailable. Objective 99.5%.",
+      "description": "B1. Denominator is time OPERATING, not wall-clock; a parked robot is not unavailable. Objective 99.5%.",
       "gridPos": { "h": 5, "w": 6, "x": 6, "y": 1 },
       "options": { "graphMode": "area", "colorMode": "value", "reduceOptions": { "calcs": ["lastNotNull"] } },
       "fieldConfig": {
@@ -120,7 +120,7 @@
     {
       "type": "stat",
       "title": "Devices on intended bundle",
-      "description": "B5. Denominator is devices that were online and had the opportunity to converge — twin desired-state is convergent, so an offline robot is not a failure.",
+      "description": "B5. Denominator is devices that were online and had the opportunity to converge, twin desired-state is convergent, so an offline robot is not a failure.",
       "gridPos": { "h": 5, "w": 6, "x": 12, "y": 1 },
       "options": { "graphMode": "area", "colorMode": "value", "reduceOptions": { "calcs": ["lastNotNull"] } },
       "fieldConfig": {
@@ -145,7 +145,7 @@
     {
       "type": "stat",
       "title": "Active rollbacks",
-      "description": "Rollbacks in flight right now. Non-zero is not automatically bad — it means the safety net fired and is working.",
+      "description": "Rollbacks in flight right now. Non-zero is not automatically bad; it means the safety net fired and is working.",
       "gridPos": { "h": 5, "w": 6, "x": 18, "y": 1 },
       "options": { "graphMode": "none", "colorMode": "value", "reduceOptions": { "calcs": ["lastNotNull"] } },
       "fieldConfig": {
@@ -177,7 +177,7 @@
     },
 
     {
-      "__comment": "One axis. Latency in ms only — the 45 ms budget is drawn as a threshold line, never as a second scale.",
+      "__comment": "One axis. Latency in ms only; the 45 ms budget is drawn as a threshold line, never as a second scale.",
       "type": "timeseries",
       "title": "Inference latency p99 by ring",
       "description": "B2. The 45 ms line is the perception budget from the vehicle latency chain, not a warning level.",
@@ -224,7 +224,7 @@
     {
       "type": "timeseries",
       "title": "Personnel detections per km vs ring baseline",
-      "description": "Rollback predicate. Deviation is watched in BOTH directions: a collapse means the model has gone blind, a spike means nuisance stops — and operators learn to override a model that cries wolf.",
+      "description": "Rollback predicate. Deviation is watched in BOTH directions: a collapse means the model has gone blind, a spike means nuisance stops, and operators learn to override a model that cries wolf.",
       "gridPos": { "h": 8, "w": 12, "x": 12, "y": 7 },
       "fieldConfig": {
         "defaults": {
@@ -263,7 +263,7 @@
     },
 
     {
-      "__comment": "Small multiples rather than eight series on one plot — past three series the all-pairs colour floors cannot be met, so we facet instead of cycling hues.",
+      "__comment": "Small multiples rather than eight series on one plot, past three series the all-pairs colour floors cannot be met, so we facet instead of cycling hues.",
       "type": "timeseries",
       "title": "Out-of-distribution rate by site",
       "description": "Earliest available drift warning. A spike at ONE site is usually physical (new equipment, changed lighting, a re-muck); fleet-wide suggests the release. Runbook P2.",
@@ -301,7 +301,7 @@
     {
       "type": "bargauge",
       "title": "Thermal headroom by site (28 d)",
-      "description": "B4. Measured separately from latency on purpose — throttling makes every latency figure untrustworthy, and a thermal fault should not be able to masquerade as a model regression.",
+      "description": "B4. Measured separately from latency on purpose, throttling makes every latency figure untrustworthy, and a thermal fault should not be able to masquerade as a model regression.",
       "gridPos": { "h": 8, "w": 12, "x": 12, "y": 15 },
       "options": {
         "displayMode": "gradient",
@@ -337,9 +337,9 @@
     },
 
     {
-      "__comment": "The table view is the accessibility fallback required whenever a status colour is doing work — identity is never colour-alone.",
+      "__comment": "The table view is the accessibility fallback required whenever a status colour is doing work (identity is never colour-alone.",
       "type": "table",
-      "title": "SLO status — fleet group",
+      "title": "SLO status) fleet group",
       "description": "Generated by src/edgeforge/fleet/slo.py and written back as SloStatus_CL. This table is also the non-colour reading of every threshold on this page.",
       "gridPos": { "h": 8, "w": 24, "x": 0, "y": 23 },
       "options": { "showHeader": true, "cellHeight": "sm" },

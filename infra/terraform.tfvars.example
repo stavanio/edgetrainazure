@@ -1,11 +1,11 @@
 # Copy to terraform.tfvars and fill in. Never commit terraform.tfvars.
 
 prefix      = "edgefrg"
-environment = "dev"          # dev | stage | prod — each is a SEPARATE subscription
+environment = "dev"          # dev | stage | prod; each is a SEPARATE subscription
 location    = "eastus"       # must have A100 quota and IoT Hub availability
 
 # Geo-replicate ACR into the regions where robot sites actually are. Each
-# replica is a fixed monthly cost — do not add regions speculatively.
+# replica is a fixed monthly cost: do not add regions speculatively.
 acr_replica_locations = ["westeurope"]
 
 vnet_cidr = "10.42.0.0/16"
