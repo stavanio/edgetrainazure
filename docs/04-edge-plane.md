@@ -1,5 +1,9 @@
 # 04 — Edge plane
 
+> **Design artifact.** This describes an architecture that has not been deployed.
+> Figures are design targets and planning assumptions, not measurements —
+> see the status table in the [README](../README.md).
+
 ## 4.1 Optimize
 
 A model that passes every cloud gate is still unproven. The thing that ships is not the

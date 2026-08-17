@@ -1,7 +1,36 @@
 # edgetrainazure — `edgeforge`
 
-**An end-to-end AI training and deployment platform on Microsoft Azure for a fleet of
-autonomous, edge-inferencing field robots.**
+**A reference architecture for an end-to-end AI training and deployment platform on
+Microsoft Azure, for a fleet of autonomous, edge-inferencing field robots.**
+
+---
+
+## Status: design artifact, not a deployed system
+
+**This is a reference architecture and working design study. It has never been
+applied to an Azure subscription, and there is no robot fleet behind it.** Every
+number in this repository is a design target or a planning estimate, not a
+measurement. Read the table below before reading anything else.
+
+| Maturity | What | Where |
+|---|---|---|
+| **Implemented and tested** | Decision logic that can be exercised without cloud or hardware: scenario taxonomy, quality gates, dedupe and stratified sampling, snapshot integrity, labeling triage, promotion gates, SLO evaluation and error-budget policy, on-robot frame scoring. **84 unit tests, all passing.** | `src/edgeforge/{taxonomy,curation,labeling,evaluation,fleet}`, `src/edge_modules/curator`, `tests/` |
+| **Specified, never executed** | Infrastructure and delivery definitions that are complete and internally consistent, but have never been applied or deployed. `terraform validate` runs in CI; `terraform apply` has never been run. | `infra/`, `pipelines/aml/`, `deploy/`, `observability/dashboards/`, `observability/queries/`, `.github/workflows/` |
+| **Interface only** | Real structure and control flow, with device- and storage-facing calls left as explicit `NotImplementedError` hooks. The training loop, ONNX/TensorRT build, and bundle assembly are shaped correctly but not runnable end to end. | `src/edgeforge/{training,optimize,packaging}` |
+| **Modeled** | Cost figures, SLO targets, and pipeline ratios. Derived from public Azure list pricing and published results for comparable perception workloads. **Illustrative planning assumptions, not observations.** | `docs/07-cost-model.md`, `observability/slo.yaml` |
+| **Not built** | The hardware-in-the-loop rack, an Azure deployment, a robot fleet, a labeling workforce, a safety case. | — |
+
+### What that means for the numbers
+
+Where this document says a rejection rate is 6%, an auto-accept rate is 71%, or
+the platform costs $66k/month, those are **assumptions used to size the design
+and test whether it hangs together** — the kind of figure you would put in a
+planning doc and then go validate. They are stated precisely because a vague
+assumption cannot be checked or argued with, not because they have been observed.
+
+Anywhere the design depends on an assumption being roughly right, the assumption
+is called out and the consequence of being wrong is stated. See
+[`docs/07-cost-model.md`](docs/07-cost-model.md) §7.6 for the ones that matter most.
 
 ---
 
@@ -37,9 +66,10 @@ Three constraints make this hard, and they drive every design decision:
 1. **The robot triages.** Each machine scores what it sees for novelty and
    uncertainty and keeps only what is genuinely new — roughly a **250× reduction**
    before anything reaches a human. Safety events are always kept.
-2. **A large "teacher" model pre-labels.** Humans only adjudicate the ~18% of
-   images where the teacher and the currently-deployed model disagree. This is
-   where the money is: it takes annotation from ~$200k/month to ~$25k/month.
+2. **A large "teacher" model pre-labels.** Humans adjudicate only the images
+   where the teacher and the currently-deployed model disagree — modeled at ~18%.
+   This is the design's biggest cost lever: on the modeled assumptions it moves
+   annotation from ~$200k/month to ~$25k/month.
 3. **Training is followed by gating.** A new model must beat the incumbent not
    just on average, but **in every operating condition** — and must record zero
    missed personnel in a 2,000-scenario replay suite. No gate, no release. The
@@ -53,10 +83,11 @@ Three constraints make this hard, and they drive every design decision:
 
 | | 40 robots | 120 robots | 400 robots |
 |---|---|---|---|
-| Total run cost / month | ~$66k | ~$101k | ~$193k |
-| **Cost per robot / month** | **~$1,650** | **~$842** | **~$481** |
+| Modeled run cost / month | ~$66k | ~$101k | ~$193k |
+| **Modeled cost per robot / month** | **~$1,650** | **~$842** | **~$481** |
 
-Cost per robot falls **~3.4× from 40 to 400 machines.** A ten-times-larger fleet
+On these assumptions cost per robot falls **~3.4× from 40 to 400 machines.** The
+reasoning behind that, which matters more than the figure: a ten-times-larger fleet
 does not see ten times more *novel* situations — it sees the same world more
 often. The on-robot triage converts that redundancy into savings rather than
 storage bills. This is the core economic argument: **the platform gets cheaper per
@@ -78,7 +109,9 @@ Four indicators are **invariants, not targets**: they have no error budget and a
 single breach stops releases fleet-wide. Missed-personnel detection is the first
 of them. Full catalogue in [`docs/06-sli-slo-and-telemetry.md`](docs/06-sli-slo-and-telemetry.md).
 
-### The headline numbers
+### The headline design targets
+
+Targets the architecture is built to meet — not results it has produced.
 
 | Measure | Target | Why it matters |
 |---|---|---|
@@ -145,8 +178,8 @@ uploads when it surfaces onto site Wi-Fi. High-value shards are uploaded first,
 ordered by a priority score computed *on the robot*. Bulk history moves by Azure
 Data Box when a site accumulates faster than its uplink drains.
 
-**Curation is a gate, not a transform.** ~85% of raw field frames are
-near-duplicates of frames already in the dataset. Blur/exposure/dust rejection,
+**Curation is a gate, not a transform.** The design assumes the large majority of
+raw field frames are near-duplicates of frames already in the dataset. Blur/exposure/dust rejection,
 perceptual-hash plus embedding dedupe, and stratified sampling against the
 scenario taxonomy all run before anything reaches a labeler.
 

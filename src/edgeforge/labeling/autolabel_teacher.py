@@ -9,7 +9,9 @@ served as an AML managed online endpoint on A100. It is slow, expensive per
 frame, and never ships to a robot -- all of which is fine, because it runs
 offline in batch.
 
-Routing outcome on this workload, steady state:
+Modeled routing mix, used to size the labeling budget. These are design
+assumptions, not observations -- the auto-accept rate in particular has to be
+established against a real teacher and a real dataset:
 
     auto-accept      ~71%   teacher confident, deployed student agrees
     human review     ~18%   teacher confident, student disagrees   <- highest value

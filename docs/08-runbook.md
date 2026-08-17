@@ -1,5 +1,9 @@
 # 08 — Runbook
 
+> **Design artifact.** This describes an architecture that has not been deployed.
+> Figures are design targets and planning assumptions, not measurements —
+> see the status table in the [README](../README.md).
+
 ## 8.1 The 11-day loop, where the time goes
 
 Design target from "a novel field condition is observed" to "hardened model on the full

@@ -64,11 +64,11 @@ class Config:
     grad_clip: float = 1.0
     amp_dtype: str = "bf16"
 
-    # Fraction of each batch drawn from simulation. Sweeping this is worth more
-    # than sweeping the learning rate: measured on this workload, synthetic
-    # pretraining buys ~+6 mAP on rare classes and roughly halves the real frames
-    # needed to hit a target -- but a model trained on synthetic alone loses 20+
-    # mAP the first time it meets real dust.
+    # Fraction of each batch drawn from simulation. Expected to be worth more than
+    # sweeping the learning rate: synthetic pretraining should help most on rare
+    # classes, while a model trained on synthetic alone is expected to degrade
+    # sharply on real degraded-visibility imagery. Both are assumptions to
+    # establish per workload, which is why this is swept rather than fixed.
     sim_ratio: float = 0.4
 
     # Distillation mixing. Feature alignment at two scales matters more than the

@@ -1,5 +1,9 @@
 # 02 — Data plane
 
+> **Design artifact.** This describes an architecture that has not been deployed.
+> Figures are design targets and planning assumptions, not measurements —
+> see the status table in the [README](../README.md).
+
 ## 2.1 On-robot capture and triage
 
 The robot never uploads everything. It cannot — 180 GB/shift against a shared surface link
@@ -14,8 +18,10 @@ The `curator` module ([`src/edge_modules/curator/`](../src/edge_modules/curator)
 | **T1 — interesting** | Novelty or uncertainty above twin threshold | 7 days | High, on next link |
 | **T2 — background** | Deterministic sample, 1 frame / 4 s / camera | 24 h | Low, best effort |
 
-Everything else is dropped at the ring buffer. Typical retained volume: **~2.1 GB/shift/robot**,
-an 85× reduction, and the retained fraction is *far* more informative than a uniform sample.
+Everything else is dropped at the ring buffer. The design sizes retained volume at
+**~2.1 GB/shift/robot**, an 85× reduction, on the assumption that the retained
+fraction is far more informative than a uniform sample. That assumption is the
+one to validate first on real data — the whole cost model rests on it.
 
 Scoring runs on the same Orin that runs perception, in the gap between inference frames:
 
@@ -86,7 +92,7 @@ policy** (time-based retention, 7 years, legal-hold capable) — it is evidence.
 Rejection is logged with a reason, never silent — the rejection-rate time series is itself
 a fleet health signal (a camera going soft shows up here weeks before anyone notices).
 
-| Gate | Metric | Reject when | Typical rate |
+| Gate | Metric | Reject when | Assumed rate |
 |---|---|---|---|
 | Blur | variance of Laplacian | `< 55` | 6% |
 | Exposure | fraction of pixels clipped | `> 12%` at either end | 4% |
@@ -104,8 +110,8 @@ on frames a human could not interpret, and the model learns to be confident in a
 
 1. **Near-duplicate removal, two stage.** Perceptual hash (fast, catches a stationary robot
    emitting identical frames) then embedding cosine similarity within a temporal and spatial
-   neighbourhood (catches the same drift traversed twice at different speeds). Typically
-   removes 60–70% of what survives quality gates.
+   neighbourhood (catches the same drift traversed twice at different speeds). Modeled
+   at 60–70% of what survives quality gates.
 2. **Stratification against the scenario taxonomy.** Every frame is tagged with
    `(illumination, dust_level, surface_class, geometry_class, personnel_present, machine_present)`.
    The sampler enforces per-cell floors so that rare-but-critical cells — *personnel present,
@@ -141,4 +147,4 @@ archaeology project.
 is cheaper to recompute than to store. `/curated` and `/snapshot` are not — they contain
 human labeling effort and irreproducible sampling decisions.
 
-See [`docs/07-cost-model.md`](07-cost-model.md) for what this actually costs.
+See [`docs/07-cost-model.md`](07-cost-model.md) for the modeled cost of this retention policy.

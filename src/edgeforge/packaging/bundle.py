@@ -203,9 +203,9 @@ def assemble(
 ) -> Path:
     """Lay out the bundle directory and write the manifest.
 
-    Refuses to assemble a bundle whose build or gates failed. This check exists
-    because the alternative -- assembling and relying on a later stage to notice
-    -- has failed in practice more than once.
+    Refuses to assemble a bundle whose build or gates failed. Checked here rather
+    than left to a later stage: an artifact that exists is an artifact someone can
+    deploy by hand.
     """
     if not build.passed:
         raise RuntimeError(

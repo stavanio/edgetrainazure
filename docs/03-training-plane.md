@@ -1,10 +1,18 @@
 # 03 — Training plane
 
+> **Design artifact.** This describes an architecture that has not been deployed.
+> Figures are design targets and planning assumptions, not measurements —
+> see the status table in the [README](../README.md).
+
 ## 3.1 Labeling: teacher-student with human adjudication
 
 Human labeling is the most expensive resource in the loop — roughly 40× the cost per frame
 of every compute step combined. The design goal is therefore not "label well" but
 **"label as few frames as possible, and only the ones that matter."**
+
+The percentages below are **modeled**, used to size the labeling budget. The
+auto-accept rate is the most important assumption in the entire design and the
+first thing to establish against a real teacher and a real dataset.
 
 ```
 /curated frame
@@ -59,10 +67,12 @@ labeling cost. It lands in `/labeled` tagged `source=sim` and is **never** allow
 evaluation set.
 
 **The sim-to-real gap is real and is managed, not ignored.** Synthetic data is used for
-pre-training and for tail-class oversampling only. The measured rule of thumb on this
-workload: synthetic pre-training buys ~+6 mAP on rare classes and roughly halves the real
-frames needed to reach a target, but a model trained on synthetic alone loses 20+ mAP when
-it hits real dust. See the `sim_ratio` sweep in
+pre-training and for tail-class oversampling only. The working assumption, taken from
+published results on comparable perception workloads: synthetic pre-training buys
+single-digit mAP on rare classes and materially reduces the real frames needed to reach a
+target, while a model trained on synthetic alone degrades sharply on real degraded-visibility
+imagery. The `sim_ratio` sweep exists precisely because this assumption has to be
+established per workload rather than inherited. See the `sim_ratio` sweep in
 [`pipelines/aml/pipeline-train-perception.yml`](../pipelines/aml/pipeline-train-perception.yml).
 
 ## 3.3 Training
@@ -94,8 +104,8 @@ alignment at two scales. Implementation in
 ### Reproducibility
 
 Every job pins: snapshot Merkle root, git SHA of this repo, environment image digest (not
-tag), CUDA/cuDNN versions, and all seeds. `deterministic=True` costs ~12% throughput and is
-enabled for `finetune` and `distill`, disabled for sweeps. An AML job can be re-run from its
+tag), CUDA/cuDNN versions, and all seeds. `deterministic=True` costs throughput — budgeted
+at ~12% — and is enabled for `finetune` and `distill`, disabled for sweeps. An AML job can be re-run from its
 recorded inputs and lands within tolerance — this is checked weekly by a canary re-run, not
 assumed.
 

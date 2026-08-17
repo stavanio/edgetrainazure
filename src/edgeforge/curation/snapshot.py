@@ -6,7 +6,7 @@ is investigated eighteen months later, "what exactly did this model learn from"
 must be a query, not an archaeology project.
 
 The Merkle root over the sorted file list is what makes that claim checkable:
-recompute it against the snapshot directory and you have proven the bytes have
+recompute it against the snapshot directory and you have shown the bytes have
 not moved.
 """
 

@@ -1,5 +1,9 @@
 # 01 — Architecture
 
+> **Design artifact.** This describes an architecture that has not been deployed.
+> Figures are design targets and planning assumptions, not measurements —
+> see the status table in the [README](../README.md).
+
 ## 1.1 The workload
 
 | Property | Value |

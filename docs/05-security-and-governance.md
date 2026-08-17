@@ -1,5 +1,9 @@
 # 06 — Security and governance
 
+> **Design artifact.** This describes an architecture that has not been deployed.
+> Figures are design targets and planning assumptions, not measurements —
+> see the status table in the [README](../README.md).
+
 The threat model here is not "someone reads our training data." It is **"someone changes
 what a 30-tonne machine believes it is looking at."** Every control below is ordered by
 that.

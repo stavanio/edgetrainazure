@@ -1,5 +1,9 @@
 # 06 — SLIs, SLOs, telemetry, and dashboards
 
+> **Design artifact.** This describes an architecture that has not been deployed.
+> Figures are design targets and planning assumptions, not measurements —
+> see the status table in the [README](../README.md).
+
 Everything in this document exists to answer three questions without anyone having
 to ask a person:
 
