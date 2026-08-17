@@ -20,7 +20,8 @@ subnet_cidrs = {
   functions          = "10.42.16.0/26"
 }
 
-# dev: 1 node is enough to validate the pipeline shape. Raise for stage/prod.
+# NODES, not GPUs: NC96ads_A100_v4 is 4x A100 80GB per node.
+# dev: 1 node (4 A100) is enough to validate the pipeline shape.
 gpu_train_sku       = "Standard_NC96ads_A100_v4"
 gpu_train_max_nodes = 1
 gpu_eval_sku        = "Standard_NC24ads_A100_v4"

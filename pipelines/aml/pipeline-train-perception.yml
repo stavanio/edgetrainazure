@@ -66,10 +66,12 @@ jobs:
     compute: azureml:gpu-train
     environment: azureml:edgeforge-train@latest
     resources:
-      instance_count: 8
+      # NC96ads_A100_v4 carries 4x A100 80GB per node, NVLink within the node.
+      # One rank per GPU: 2 nodes = 8 A100, which is the pretrain footprint.
+      instance_count: 2
     distribution:
       type: pytorch
-      process_count_per_instance: 8
+      process_count_per_instance: 4
     inputs:
       snapshot: ${{parent.inputs.snapshot}}
       sim_ratio: ${{parent.inputs.sim_ratio}}
@@ -95,10 +97,10 @@ jobs:
     compute: azureml:gpu-train
     environment: azureml:edgeforge-train@latest
     resources:
-      instance_count: 8
+      instance_count: 2          # 8 A100
     distribution:
       type: pytorch
-      process_count_per_instance: 8
+      process_count_per_instance: 4
     inputs:
       snapshot: ${{parent.inputs.snapshot}}
       pretrained: ${{parent.jobs.pretrain.outputs.checkpoint}}
@@ -125,10 +127,12 @@ jobs:
     compute: azureml:gpu-train
     environment: azureml:edgeforge-train@latest
     resources:
-      instance_count: 4
+      # The student is small enough that a single node avoids inter-node
+      # gradient traffic entirely; distillation is compute-bound, not bandwidth-bound.
+      instance_count: 1          # 4 A100
     distribution:
       type: pytorch
-      process_count_per_instance: 8
+      process_count_per_instance: 4
     inputs:
       snapshot: ${{parent.inputs.snapshot}}
       teacher: ${{parent.jobs.finetune.outputs.checkpoint}}

@@ -57,9 +57,13 @@ variable "gpu_train_sku" {
 }
 
 variable "gpu_train_max_nodes" {
-  description = "Max nodes in the training cluster. Guard against runaway sweeps."
+  description = <<-DESC
+    Max NODES in the training cluster, not GPUs. NC96ads_A100_v4 carries 4x A100
+    80GB per node, so 2 nodes = 8 A100 (the documented dev/stage quota) and
+    16 nodes = 64 A100 (prod). Guard against runaway sweeps.
+  DESC
   type        = number
-  default     = 4
+  default     = 2
 }
 
 variable "gpu_eval_sku" {
