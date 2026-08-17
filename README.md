@@ -12,14 +12,14 @@ section is the engineering detail.*
 
 ### What it is
 
-A closed-loop system that turns what our robots see in the field into better
-software on those robots — continuously, safely, and at falling unit cost.
-Today that loop is manual, slow, and unmeasured. This makes it an assembly line
-with instrumentation, quality gates, and an undo button.
+A closed-loop system that turns what a robot sees in the field into better
+software on that robot — continuously, safely, and at falling unit cost. It is
+an assembly line for models: instrumented end to end, gated at every stage, with
+an undo button.
 
 ### The problem it solves
 
-We operate a fleet of autonomous machines in an environment that is dark, dusty,
+A fleet of autonomous machines works in an environment that is dark, dusty,
 GNSS-denied, and shared with people. The machines make decisions from cameras and
 LiDAR using AI models. Those models are only as good as the data they learn from,
 and the field constantly produces situations no one anticipated.
@@ -29,7 +29,7 @@ Three constraints make this hard, and they drive every design decision:
 | Constraint | Consequence |
 |---|---|
 | **The network is the bottleneck, not the computers.** Each robot generates ~180 GB per shift; a site's uplink cannot carry a fraction of it. | The robot must decide *on board* what is worth keeping. |
-| **Human labeling is the dominant cost.** Having people annotate what is in each image is ~40× the cost of all the computing combined. | We must ask humans about as few images as possible. |
+| **Human labeling is the dominant cost.** Having people annotate what is in each image is ~40× the cost of all the computing combined. | Ask humans about as few images as possible. |
 | **The model must fit the machine.** 45 milliseconds, 40 watts, on a robot already running navigation and control. | The model that ships is small, and every optimization is measured on real hardware. |
 
 ### How it works, in four steps
@@ -40,11 +40,11 @@ Three constraints make this hard, and they drive every design decision:
 2. **A large "teacher" model pre-labels.** Humans only adjudicate the ~18% of
    images where the teacher and the currently-deployed model disagree. This is
    where the money is: it takes annotation from ~$200k/month to ~$25k/month.
-3. **We train, then we gate.** A new model must beat the incumbent not just on
-   average, but **in every operating condition** — and must record zero missed
-   personnel in a 2,000-scenario replay suite. No gate, no release. The gates
-   generate the evidence our safety case needs as a by-product.
-4. **We release in rings, and we can undo.** Two robots, then one site, then the
+3. **Training is followed by gating.** A new model must beat the incumbent not
+   just on average, but **in every operating condition** — and must record zero
+   missed personnel in a 2,000-scenario replay suite. No gate, no release. The
+   gates generate safety-case evidence as a by-product.
+4. **Release is ringed, and reversible.** Two robots, then one site, then the
    fleet. Live health metrics are watched continuously, and a bad release rolls
    back automatically in minutes — without needing a network connection to the
    robot, because the previous version never leaves the machine.
@@ -62,7 +62,7 @@ often. The on-robot triage converts that redundancy into savings rather than
 storage bills. This is the core economic argument: **the platform gets cheaper per
 unit as the fleet grows, and the models get better at the same time.**
 
-### How we know it is working
+### How it is measured
 
 The platform reports against **25 indicators** in four groups — 4 safety
 invariants plus 21 service-level objectives across fleet reliability, pipeline
@@ -82,19 +82,11 @@ of them. Full catalogue in [`docs/06-sli-slo-and-telemetry.md`](docs/06-sli-slo-
 
 | Measure | Target | Why it matters |
 |---|---|---|
-| Loop time — field condition to full fleet | **≤ 11 days** | How fast we respond to a new hazard |
+| Loop time — field condition to full fleet | **≤ 11 days** | Response time to a new hazard |
 | Missed-personnel events | **0, absolute** | The thing that must never happen |
 | Automatic rollback | **≤ 5 min, no network needed** | Blast radius of a bad release |
 | Labeling auto-accept rate | **≥ 70%** | The single biggest cost lever |
 | Cost per robot / month at scale | **↓ 3.4×** | Unit economics improve with growth |
-
-### What this is not
-
-It does not write the robot's navigation or control software — that lives with the
-vehicle team. It does not, by itself, constitute a safety case; it *produces the
-evidence* a safety case is built from. And it is not a research project: every
-component here exists to move a model from a field observation to a running
-machine, with a record of how it got there.
 
 ---
 
@@ -236,24 +228,9 @@ make edge-bundle MODEL=hazard-seg VERSION=41 TARGET=orin-agx-64
 # 6. Roll to the canary ring
 make rollout BUNDLE=hazard-seg:41 RING=canary
 
-# 7. Check where we stand against the objectives
+# 7. Check current standing against the objectives
 make slo-report
 ```
 
 Every `make` target is a thin wrapper over an `az ml` / `az iot` call —
 see the [`Makefile`](Makefile). Nothing is hidden behind bespoke tooling.
-
----
-
-## 5. What is deliberately not here
-
-- **No robot-specific autonomy code.** Planning, control, and state estimation
-  live in the vehicle repo. `edgeforge` owns the *learned* components only:
-  perception, traversability, and anomaly heads.
-- **No safety case.** The functional-safety argument (IEC 61508 / ISO 17757 for
-  earth-moving machinery) is a separate artifact. This pipeline *produces evidence*
-  for it — versioned datasets, model cards, gate results, field telemetry — but
-  does not make it.
-- **No production secrets.** Everything authenticates via Entra ID managed
-  identity or workload identity federation. There are no keys to leak; see
-  [`docs/05-security-and-governance.md`](docs/05-security-and-governance.md).
