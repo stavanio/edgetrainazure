@@ -1,0 +1,128 @@
+$schema: https://azuremlschemas.azureedge.net/latest/pipelineJob.schema.json
+type: pipeline
+
+display_name: edgeforge-curate
+experiment_name: curation
+description: >
+  /raw -> /clean -> /curated -> /labeled -> /snapshot. Everything here exists to
+  spend the labeling budget well: on this workload roughly 250x fewer frames
+  reach a human than the sensors produce, and the ones that do are chosen for
+  information content rather than sampled uniformly.
+
+settings:
+  default_compute: azureml:cpu-curate
+  continue_on_step_failure: false
+
+inputs:
+  raw_uri:
+    type: uri_folder
+    path: azureml://datastores/raw/paths/site-alpha/2026-08-01/
+    mode: ro_mount
+
+  deployed_model:
+    type: mlflow_model
+    # The currently-deployed student. Used for the teacher/student disagreement
+    # routing that produces the highest-value labeling queue in the system.
+    path: azureml://registries/mlr-edgefrg/models/hazard-seg/versions/40
+
+  target_snapshot_size:
+    type: integer
+    default: 180000
+
+  dataset_name:
+    type: string
+    default: mr1-hazard
+
+outputs:
+  snapshot:
+    type: uri_folder
+  coverage_report:
+    type: uri_file
+
+jobs:
+
+  # -- 1. quality gates ------------------------------------------------------
+  # Rejection is never silent: the reject ledger's per-camera rate is the
+  # earliest hardware-degradation signal the fleet produces.
+  quality_gates:
+    type: command
+    environment: azureml:edgeforge-curate@latest
+    inputs:
+      raw: ${{parent.inputs.raw_uri}}
+    outputs:
+      clean:
+        type: uri_folder
+      reject_ledger:
+        type: uri_folder
+    command: >-
+      python -m edgeforge.curation.run_gates
+      --raw ${{inputs.raw}}
+      --out ${{outputs.clean}}
+      --ledger ${{outputs.reject_ledger}}
+
+  # -- 2. dedupe + PII redaction --------------------------------------------
+  # ~60-70% of quality-passed frames are near-duplicates. Redaction happens here,
+  # before any human sees a frame; unblurred originals stay in /raw under access
+  # control.
+  dedupe:
+    type: command
+    environment: azureml:edgeforge-curate@latest
+    inputs:
+      clean: ${{parent.jobs.quality_gates.outputs.clean}}
+    outputs:
+      curated:
+        type: uri_folder
+    command: >-
+      python -m edgeforge.curation.run_dedupe
+      --clean ${{inputs.clean}}
+      --out ${{outputs.curated}}
+      --redact-pii
+
+  # -- 3. teacher auto-label + triage routing -------------------------------
+  # The dominant cost lever in the whole platform. Every point of auto-accept
+  # rate is roughly $350/month at the design point.
+  autolabel:
+    type: command
+    compute: azureml:gpu-eval
+    environment: azureml:edgeforge-teacher@latest
+    inputs:
+      curated: ${{parent.jobs.dedupe.outputs.curated}}
+      student: ${{parent.inputs.deployed_model}}
+    outputs:
+      labeled:
+        type: uri_folder
+      review_queue:
+        type: uri_folder
+    command: >-
+      python -m edgeforge.labeling.run_autolabel
+      --curated ${{inputs.curated}}
+      --student ${{inputs.student}}
+      --labeled ${{outputs.labeled}}
+      --review-queue ${{outputs.review_queue}}
+
+  # -- 4. stratified sample + snapshot --------------------------------------
+  # Floors first, then the share ceiling, then proportional fill. Doing floors
+  # first is what keeps rare safety-critical cells in the set.
+  #
+  # Read the coverage report BEFORE launching training: a cell below its floor
+  # here becomes a failed slice gate five days later, and the cycle is wasted for
+  # a shortfall that was visible now.
+  snapshot:
+    type: command
+    environment: azureml:edgeforge-curate@latest
+    inputs:
+      labeled: ${{parent.jobs.autolabel.outputs.labeled}}
+      target_size: ${{parent.inputs.target_snapshot_size}}
+      dataset_name: ${{parent.inputs.dataset_name}}
+    outputs:
+      snapshot: ${{parent.outputs.snapshot}}
+      coverage: ${{parent.outputs.coverage_report}}
+    command: >-
+      python -m edgeforge.curation.run_snapshot
+      --labeled ${{inputs.labeled}}
+      --target-size ${{inputs.target_size}}
+      --dataset ${{inputs.dataset_name}}
+      --out ${{outputs.snapshot}}
+      --coverage-report ${{outputs.coverage}}
+      --register-data-asset
+      --fail-on-safety-critical-shortfall

@@ -1,0 +1,109 @@
+# Rollout rings.
+#
+# Targeting is a device-twin tag query, so moving a robot between rings is a twin
+# patch -- no deployment edit, no manifest churn, and a robot that was offline
+# converges to the correct state when it reconnects.
+#
+# Soak times are in shifts, not hours, deliberately: a shift is the unit that
+# exposes a model to a full duty cycle including shift change, re-fuelling, and
+# the traffic pattern that comes with both.
+
+version: 2
+
+defaults:
+  # Bundles are verified against the pinned trust store before any twin is
+  # patched. An unsigned or untrusted bundle never reaches a device.
+  require_signature: true
+  # Previous known-good stays resident on device so rollback never needs network.
+  retain_previous_bundles: 2
+  health_settle_minutes: 10
+
+rings:
+  - name: hil
+    description: Hardware-in-the-loop rack. Not a robot; no people nearby.
+    target_condition: "tags.ring = 'hil'"
+    population: rack
+    soak:
+      duration: PT2H
+    advance_criteria:
+      - automated_regression_suite: green
+    auto_advance: true
+
+  - name: canary
+    description: Two robots at one site, supervised shift, operator briefed.
+    target_condition: "tags.ring = 'canary'"
+    population: 2
+    shadow_mode: true          # new bundle runs alongside incumbent; only incumbent drives
+    soak:
+      shifts: 1
+    advance_criteria:
+      - all_health_slos: green
+      - safety_events_attributable: 0
+      - shadow_disagreement_reviewed: true
+    auto_advance: false
+
+  - name: pilot
+    description: All robots at one site, normal operation.
+    target_condition: "tags.ring = 'pilot'"
+    population: site
+    shadow_mode: false
+    soak:
+      shifts: 3
+    advance_criteria:
+      - all_health_slos: green
+      - false_stop_rate_increase_pct_max: 5
+      - operator_signoff: required
+    auto_advance: false
+
+  - name: production
+    description: Full fleet.
+    target_condition: "tags.ring = 'production'"
+    population: fleet
+    soak:
+      shifts: 0
+    advance_criteria:
+      - approvals_required: 2
+      - approvers_from_distinct_teams: true
+    auto_advance: false
+
+# Rollback predicates. Any one firing rolls the affected ring back to
+# last-known-good. Mirrored as Azure Monitor rules in infra/observability.tf;
+# this file is the human-readable source of truth for what they mean.
+rollback_predicates:
+  - id: latency_budget_exceeded
+    expr: "inference_p99_ms > 45"
+    consecutive_windows: 3
+    severity: high
+
+  - id: frames_dropped
+    expr: "dropped_frames_pct > 0.5"
+    consecutive_windows: 2
+    severity: high
+
+  - id: thermal_throttling
+    expr: "throttled_pct > 5"
+    consecutive_windows: 3
+    severity: medium
+
+  - id: personnel_rate_deviation
+    # Either direction. A collapse means the model has gone blind; a spike means
+    # nuisance stops, which operators learn to override -- and an overridden
+    # safety model protects nobody.
+    expr: "abs(detections_per_km.personnel - ring_baseline.mu) > 3 * ring_baseline.sigma"
+    consecutive_windows: 2
+    severity: critical
+
+  - id: ood_spike
+    expr: "ood_rate > 5 * eval_ood_rate"
+    consecutive_windows: 4
+    severity: low          # usually environmental; see runbook P2 before rolling back
+
+  - id: perception_disengagement
+    expr: "disengagements_attributed_to_perception > 0"
+    consecutive_windows: 1
+    severity: critical
+
+  - id: safety_envelope_violation
+    expr: "safety_envelope_violations > 0"
+    consecutive_windows: 1
+    severity: critical

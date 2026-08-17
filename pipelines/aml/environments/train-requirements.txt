@@ -1,0 +1,12 @@
+# Hash-pinned. Regenerate with:
+#   pip-compile --generate-hashes --index-url "$PRIVATE_FEED_URL" train-requirements.in
+#
+# --require-hashes is enforced in the Dockerfile: an unpinned dependency makes
+# the image irreproducible, and the image digest is what an AML job records as
+# its environment. Placeholder hashes below are replaced by the real lockfile.
+torch==2.4.1 --hash=sha256:0000000000000000000000000000000000000000000000000000000000000000
+mlflow==2.16.2 --hash=sha256:0000000000000000000000000000000000000000000000000000000000000000
+azure-ai-ml==1.20.0 --hash=sha256:0000000000000000000000000000000000000000000000000000000000000000
+azure-identity==1.18.0 --hash=sha256:0000000000000000000000000000000000000000000000000000000000000000
+numpy==1.26.4 --hash=sha256:0000000000000000000000000000000000000000000000000000000000000000
+pyyaml==6.0.2 --hash=sha256:0000000000000000000000000000000000000000000000000000000000000000

@@ -1,0 +1,170 @@
+$schema: https://azuremlschemas.azureedge.net/latest/pipelineJob.schema.json
+type: pipeline
+
+display_name: edgeforge-train-perception
+experiment_name: perception
+description: >
+  Curriculum training for the on-vehicle perception student: pretrain on
+  synthetic + auto-labeled real, finetune on human-labeled real, distill into the
+  edge-sized student, then gate. The teacher never ships; only the student does.
+
+settings:
+  default_compute: azureml:gpu-train
+  continue_on_step_failure: false
+  force_rerun: false
+
+inputs:
+  snapshot:
+    type: uri_folder
+    # A frozen, content-addressed deep clone -- never a live table. See
+    # src/edgeforge/curation/snapshot.py for why this is non-negotiable.
+    path: azureml:mr1-hazard:12
+    mode: ro_mount
+
+  golden_set:
+    type: uri_folder
+    # Separate storage account. Only the eval compute's identity can read it, so
+    # test-set leakage is prevented by IAM rather than by convention.
+    path: azureml://datastores/golden/paths/v7/
+    mode: ro_mount
+
+  incumbent_model:
+    type: mlflow_model
+    path: azureml://registries/mlr-edgefrg/models/hazard-seg/versions/40
+
+  sim_ratio:
+    type: number
+    default: 0.4
+
+  epochs_pretrain:
+    type: integer
+    default: 40
+
+  epochs_finetune:
+    type: integer
+    default: 15
+
+  epochs_distill:
+    type: integer
+    default: 25
+
+outputs:
+  student_model:
+    type: mlflow_model
+  evaluation_report:
+    type: uri_folder
+
+jobs:
+
+  # -- 1. pretrain -----------------------------------------------------------
+  # Teacher-capacity backbone (width=96) on synthetic + auto-labeled real.
+  # sim_ratio is held at the sampler, not by dataset concatenation, so the recipe
+  # stays stable as the real set grows -- which is what makes sweeping it mean
+  # anything.
+  pretrain:
+    type: command
+    compute: azureml:gpu-train
+    environment: azureml:edgeforge-train@latest
+    resources:
+      instance_count: 8
+    distribution:
+      type: pytorch
+      process_count_per_instance: 8
+    inputs:
+      snapshot: ${{parent.inputs.snapshot}}
+      sim_ratio: ${{parent.inputs.sim_ratio}}
+      epochs: ${{parent.inputs.epochs_pretrain}}
+    outputs:
+      checkpoint:
+        type: uri_folder
+    command: >-
+      python -m edgeforge.training.train_perception
+      --stage pretrain
+      --snapshot-uri ${{inputs.snapshot}}
+      --sim-ratio ${{inputs.sim_ratio}}
+      --epochs ${{inputs.epochs}}
+      --output-dir ${{outputs.checkpoint}}
+      --no-deterministic
+
+  # -- 2. finetune -----------------------------------------------------------
+  # Human-labeled real only, low LR, class-balanced sampler. Determinism is ON
+  # from here: these weights can become shippable, and the ~12% throughput cost
+  # is worth a reproducible artifact.
+  finetune:
+    type: command
+    compute: azureml:gpu-train
+    environment: azureml:edgeforge-train@latest
+    resources:
+      instance_count: 8
+    distribution:
+      type: pytorch
+      process_count_per_instance: 8
+    inputs:
+      snapshot: ${{parent.inputs.snapshot}}
+      pretrained: ${{parent.jobs.pretrain.outputs.checkpoint}}
+      epochs: ${{parent.inputs.epochs_finetune}}
+    outputs:
+      checkpoint:
+        type: uri_folder
+    command: >-
+      python -m edgeforge.training.train_perception
+      --stage finetune
+      --snapshot-uri ${{inputs.snapshot}}
+      --teacher-checkpoint ${{inputs.pretrained}}/pretrain.pt
+      --epochs ${{inputs.epochs}}
+      --lr 5e-5
+      --sim-ratio 0.0
+      --output-dir ${{outputs.checkpoint}}
+
+  # -- 3. distill ------------------------------------------------------------
+  # The student (width=32, ~9M params across four heads) learns from teacher
+  # logits, hard labels, and feature-map alignment at two scales. This is the
+  # thing that ships.
+  distill:
+    type: command
+    compute: azureml:gpu-train
+    environment: azureml:edgeforge-train@latest
+    resources:
+      instance_count: 4
+    distribution:
+      type: pytorch
+      process_count_per_instance: 8
+    inputs:
+      snapshot: ${{parent.inputs.snapshot}}
+      teacher: ${{parent.jobs.finetune.outputs.checkpoint}}
+      epochs: ${{parent.inputs.epochs_distill}}
+    outputs:
+      checkpoint:
+        type: uri_folder
+    command: >-
+      python -m edgeforge.training.train_perception
+      --stage distill
+      --snapshot-uri ${{inputs.snapshot}}
+      --teacher-checkpoint ${{inputs.teacher}}/finetune.pt
+      --epochs ${{inputs.epochs}}
+      --output-dir ${{outputs.checkpoint}}
+
+  # -- 4. evaluate + gate ----------------------------------------------------
+  # Runs on gpu-eval, under the eval identity -- the only workload with a role
+  # assignment on the golden storage account.
+  evaluate:
+    type: command
+    compute: azureml:gpu-eval
+    environment: azureml:edgeforge-eval@latest
+    inputs:
+      student: ${{parent.jobs.distill.outputs.checkpoint}}
+      golden_set: ${{parent.inputs.golden_set}}
+      snapshot: ${{parent.inputs.snapshot}}
+      incumbent: ${{parent.inputs.incumbent_model}}
+    outputs:
+      report: ${{parent.outputs.evaluation_report}}
+      model: ${{parent.outputs.student_model}}
+    command: >-
+      python -m edgeforge.evaluation.run
+      --checkpoint ${{inputs.student}}/distill.pt
+      --golden-set ${{inputs.golden_set}}
+      --snapshot ${{inputs.snapshot}}
+      --incumbent ${{inputs.incumbent}}
+      --report-dir ${{outputs.report}}
+      --model-dir ${{outputs.model}}
+      --register-stage Evaluated

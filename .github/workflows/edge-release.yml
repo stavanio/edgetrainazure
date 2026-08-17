@@ -1,0 +1,198 @@
+name: edge-release
+
+# Optimize an Approved model on real silicon, package it, sign it, and roll it
+# to a ring. Deliberately manual: nothing here fires on a push.
+
+on:
+  workflow_dispatch:
+    inputs:
+      model:
+        description: Model name
+        required: true
+        default: hazard-seg
+      version:
+        description: Registry version (must be stage=Approved)
+        required: true
+      target:
+        description: Edge SKU
+        required: true
+        default: orin-agx-64
+        type: choice
+        options: [orin-agx-64, orin-nx-16]
+      ring:
+        description: Ring to roll to after packaging
+        required: true
+        default: hil
+        type: choice
+        options: [hil, canary, pilot, production]
+
+permissions:
+  contents: read
+  id-token: write
+
+concurrency:
+  # One edge release at a time, fleet-wide. Two concurrent rollouts interleave
+  # twin patches and leave devices in a mixture no single rollback restores.
+  group: edge-release
+  cancel-in-progress: false
+
+env:
+  RELEASE_ID: ${{ github.run_id }}-${{ github.run_attempt }}
+
+jobs:
+
+  build-on-silicon:
+    # The HIL rack: real Orin modules on the production carrier and thermal
+    # solution, Arc-enabled, registered as self-hosted runners. TensorRT engines
+    # are tied to compute capability, TRT version, and often the exact driver of
+    # the machine that built them -- a cloud-built engine either refuses to load
+    # or silently behaves differently.
+    runs-on: [self-hosted, hil, "${{ inputs.target }}"]
+    outputs:
+      bundle_digest: ${{ steps.push.outputs.digest }}
+      reference: ${{ steps.push.outputs.reference }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: azure/login@v2
+        with:
+          client-id: ${{ vars.AZURE_CLIENT_ID }}
+          tenant-id: ${{ vars.AZURE_TENANT_ID }}
+          subscription-id: ${{ vars.AZURE_SUBSCRIPTION_ID }}
+
+      - name: Assert model is Approved
+        run: |
+          set -euo pipefail
+          stage=$(az ml model show --registry-name "${{ vars.AZ_REGISTRY }}" \
+                    -n "${{ inputs.model }}" -v "${{ inputs.version }}" \
+                    --query "tags.stage" -o tsv)
+          echo "registry stage: $stage"
+          if [ "$stage" != "Approved" ]; then
+            echo "::error::model is '$stage', not 'Approved'. Promotion requires two approvers from distinct teams."
+            exit 1
+          fi
+
+      - name: Download checkpoint and evaluation report
+        run: |
+          az ml model download --registry-name "${{ vars.AZ_REGISTRY }}" \
+            -n "${{ inputs.model }}" -v "${{ inputs.version }}" --download-path ./artifact
+
+      - name: Export ONNX and check parity against the checkpoint
+        run: |
+          python -m edgeforge.optimize.cli export \
+            --checkpoint ./artifact/distill.pt \
+            --out ./build/${{ inputs.model }}.onnx \
+            --parity-samples-from-snapshot
+
+      - name: Build stratified INT8 calibration set
+        # NOT a random sample. A random calibration set under-represents rare
+        # cells, so quantization error concentrates exactly where accuracy
+        # matters most.
+        run: |
+          python -m edgeforge.optimize.cli calibrate \
+            --onnx ./build/${{ inputs.model }}.onnx \
+            --target ${{ inputs.target }} \
+            --out ./build/calibration.cache
+
+      - name: Build TensorRT engine
+        run: |
+          python -m edgeforge.optimize.cli build \
+            --onnx ./build/${{ inputs.model }}.onnx \
+            --calib ./build/calibration.cache \
+            --target ${{ inputs.target }} \
+            --out ./build/${{ inputs.model }}.plan
+
+      - name: Measure under representative concurrent load
+        # 20 minutes, at 45 C ambient, with SLAM/planner/logging contending for
+        # the same SoC. An engine measured in isolation gives a number that will
+        # not survive contact with the vehicle.
+        run: |
+          python -m edgeforge.optimize.cli measure \
+            --engine ./build/${{ inputs.model }}.plan \
+            --target ${{ inputs.target }} \
+            --report ./build/build.json
+          python -m edgeforge.optimize.cli assert-budgets --report ./build/build.json
+
+      - name: Assemble bundle
+        run: |
+          python -m edgeforge.packaging.cli assemble \
+            --model ${{ inputs.model }} --version ${{ inputs.version }} \
+            --target ${{ inputs.target }} \
+            --build-report ./build/build.json \
+            --evaluation ./artifact/evaluation.json \
+            --source-commit ${{ github.sha }} \
+            --out ./bundle
+
+      - name: Generate SBOM
+        run: python -m edgeforge.packaging.cli sbom --bundle ./bundle
+
+      - name: Push bundle as OCI artifact
+        id: push
+        run: |
+          set -euo pipefail
+          ref=$(python -m edgeforge.packaging.cli push --bundle ./bundle \
+                  --registry "${{ vars.AZ_ACR }}")
+          echo "reference=$ref" >> "$GITHUB_OUTPUT"
+          echo "digest=${ref#*@}"  >> "$GITHUB_OUTPUT"
+
+      - name: Sign with Notation (HSM key in Key Vault)
+        # The runner can USE the key and cannot READ it -- Key Vault Crypto User,
+        # not Crypto Officer. A compromised runner can sign one bad bundle, which
+        # the two-person promotion gate still has to approve; it cannot walk away
+        # with the fleet's signing identity.
+        run: |
+          notation sign "${{ steps.push.outputs.reference }}" \
+            --plugin azure-kv --id "${{ vars.AZ_SIGNING_KEY }}" \
+            --signature-format cose
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: build-report-${{ env.RELEASE_ID }}
+          path: ./build/build.json
+
+  rollout:
+    needs: build-on-silicon
+    runs-on: ubuntu-latest
+    # 'production' carries a required-reviewers rule with two approvers from
+    # distinct teams; GitHub blocks the job until both approve.
+    environment: ${{ inputs.ring }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: azure/login@v2
+        with:
+          client-id: ${{ vars.AZURE_CLIENT_ID }}
+          tenant-id: ${{ vars.AZURE_TENANT_ID }}
+          subscription-id: ${{ vars.AZURE_SUBSCRIPTION_ID }}
+
+      - name: Verify signature before touching any twin
+        # A device that comes online later will faithfully converge to whatever
+        # its desired state says. An unverified bundle must never become one.
+        run: notation verify "${{ needs.build-on-silicon.outputs.reference }}"
+
+      - name: Roll to ring
+        env:
+          AZ_LOG_ANALYTICS_WORKSPACE_ID: ${{ vars.AZ_LOG_ANALYTICS_WORKSPACE_ID }}
+        run: |
+          python deploy/rollout/rollout.py \
+            --hub "${{ vars.AZ_IOTHUB }}" \
+            --bundle "${{ inputs.model }}:${{ inputs.version }}" \
+            --reference "${{ needs.build-on-silicon.outputs.reference }}" \
+            --ring "${{ inputs.ring }}" \
+            --release-id "${{ env.RELEASE_ID }}" \
+            --settle-minutes 10
+
+      - name: Summary
+        run: |
+          {
+            echo "### Edge release \`${{ inputs.model }}:${{ inputs.version }}\`"
+            echo ""
+            echo "| | |"
+            echo "|---|---|"
+            echo "| Target | \`${{ inputs.target }}\` |"
+            echo "| Ring | \`${{ inputs.ring }}\` |"
+            echo "| Reference | \`${{ needs.build-on-silicon.outputs.reference }}\` |"
+            echo "| Release ID | \`${{ env.RELEASE_ID }}\` |"
+            echo ""
+            echo "Soak the ring before advancing. See \`deploy/rollout/rings.yaml\`."
+          } >> "$GITHUB_STEP_SUMMARY"

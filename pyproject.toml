@@ -1,0 +1,76 @@
+[build-system]
+requires = ["setuptools>=69"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "edgeforge"
+version = "0.1.0"
+description = "End-to-end Azure training and deployment pipeline for edge-AI field robots"
+requires-python = ">=3.11"
+readme = "README.md"
+
+dependencies = [
+    "numpy>=1.26",
+    "pyyaml>=6.0",
+]
+
+[project.optional-dependencies]
+# Heavy training deps are installed in the AML environment image, not here, so
+# that CI and local development stay fast.
+train = [
+    "torch>=2.4",
+    "mlflow>=2.16",
+    "azure-ai-ml>=1.20",
+    "azure-identity>=1.18",
+]
+edge = [
+    "onnx>=1.16",
+    "onnxruntime>=1.19",
+]
+dev = [
+    "pytest>=8.3",
+    "pytest-cov>=5.0",
+    "ruff>=0.7",
+    "mypy>=1.13",
+    "types-PyYAML",
+]
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+src = ["src", "tests"]
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B", "SIM", "RUF"]
+ignore = [
+    "E501",    # line length is handled by the formatter
+    "B008",    # function call in default arg: intentional for dataclass factories
+]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/*" = ["B011"]
+
+[tool.mypy]
+python_version = "3.11"
+warn_unused_configs = true
+disallow_untyped_defs = false
+ignore_missing_imports = true
+# Heavy optional deps are not installed in CI; their modules are excluded rather
+# than stubbed, so a type error in the pure-logic code is not masked by import
+# noise from torch.
+exclude = [
+    "src/edgeforge/training/train_perception.py",
+    "src/edgeforge/training/datamodule.py",
+]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-q"
+filterwarnings = ["error::DeprecationWarning"]
+
+[tool.coverage.run]
+source = ["edgeforge"]
+omit = ["*/training/train_perception.py", "*/training/datamodule.py"]

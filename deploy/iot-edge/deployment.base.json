@@ -1,0 +1,111 @@
+{
+  "$schema-template": "4.0.0",
+  "_comment": [
+    "Base deployment: the runtime that rarely changes. Targeted at every robot.",
+    "A model release does NOT touch this file -- it ships as the layered",
+    "deployment in deployment.layer.model.json, so the ROS 2 bridge stays up and",
+    "the curator keeps buffering while perception reloads."
+  ],
+  "modulesContent": {
+    "$edgeAgent": {
+      "properties.desired": {
+        "schemaVersion": "1.1",
+        "runtime": {
+          "type": "docker",
+          "settings": {
+            "minDockerVersion": "v1.25",
+            "registryCredentials": {
+              "acr": {
+                "_comment": "Populated at provisioning from the device's managed identity token exchange. No stored credential lives on the robot.",
+                "address": "${ACR_LOGIN_SERVER}",
+                "username": "${ACR_IDENTITY_CLIENT_ID}",
+                "password": "${ACR_IDENTITY_TOKEN}"
+              }
+            }
+          }
+        },
+        "systemModules": {
+          "edgeAgent": {
+            "type": "docker",
+            "settings": {
+              "image": "mcr.microsoft.com/azureiotedge-agent:1.5",
+              "createOptions": "{}"
+            }
+          },
+          "edgeHub": {
+            "type": "docker",
+            "status": "running",
+            "restartPolicy": "always",
+            "settings": {
+              "image": "mcr.microsoft.com/azureiotedge-hub:1.5",
+              "createOptions": "{\"HostConfig\":{\"PortBindings\":{\"8883/tcp\":[{\"HostPort\":\"8883\"}]}}}"
+            },
+            "env": {
+              "_comment_storage": "Store-and-forward through the whole shift. A robot underground has no link; messages must survive until it surfaces.",
+              "usePersistentStorage": { "value": "true" },
+              "storageFolder": { "value": "/iotedge/storage" },
+              "timeToLiveSecs": { "value": "86400" }
+            }
+          }
+        },
+        "modules": {
+          "curator": {
+            "version": "1.0",
+            "type": "docker",
+            "status": "running",
+            "restartPolicy": "always",
+            "startupOrder": 10,
+            "settings": {
+              "image": "${ACR_LOGIN_SERVER}/edge/curator:2.4.1",
+              "createOptions": "{\"HostConfig\":{\"Binds\":[\"/mnt/nvme/ring:/data/ring\",\"/mnt/nvme/queue:/data/queue\"],\"DeviceRequests\":[{\"Driver\":\"nvidia\",\"Count\":-1,\"Capabilities\":[[\"gpu\"]]}]}}"
+            },
+            "env": {
+              "RING_BUFFER_MINUTES": { "value": "60" },
+              "_comment_sas": "The device holds no storage credential. It requests a path-scoped, 15-minute, write-only user-delegation SAS from the broker, authorised on device identity.",
+              "SAS_BROKER_URL": { "value": "${SAS_BROKER_URL}" }
+            }
+          },
+          "telemetry": {
+            "version": "1.0",
+            "type": "docker",
+            "status": "running",
+            "restartPolicy": "always",
+            "startupOrder": 20,
+            "settings": {
+              "image": "${ACR_LOGIN_SERVER}/edge/telemetry:1.9.0",
+              "createOptions": "{}"
+            },
+            "env": {
+              "HEALTH_INTERVAL_SECONDS": { "value": "30" }
+            }
+          },
+          "ros2-bridge": {
+            "version": "1.0",
+            "type": "docker",
+            "status": "running",
+            "restartPolicy": "always",
+            "startupOrder": 5,
+            "settings": {
+              "image": "${ACR_LOGIN_SERVER}/edge/ros2-bridge:3.1.0",
+              "createOptions": "{\"HostConfig\":{\"NetworkMode\":\"host\",\"IpcMode\":\"host\"}}"
+            }
+          }
+        }
+      }
+    },
+    "$edgeHub": {
+      "properties.desired": {
+        "schemaVersion": "1.2",
+        "routes": {
+          "healthToCloud": "FROM /messages/modules/telemetry/outputs/health INTO $upstream",
+          "driftToCloud": "FROM /messages/modules/curator/outputs/drift INTO $upstream",
+          "perceptionToCurator": "FROM /messages/modules/perception/outputs/signals INTO BrokeredEndpoint(\"/modules/curator/inputs/signals\")",
+          "perceptionToBridge": "FROM /messages/modules/perception/outputs/detections INTO BrokeredEndpoint(\"/modules/ros2-bridge/inputs/detections\")"
+        },
+        "storeAndForwardConfiguration": {
+          "timeToLiveSecs": 86400
+        }
+      }
+    }
+  }
+}

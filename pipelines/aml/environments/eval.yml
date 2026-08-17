@@ -1,0 +1,14 @@
+$schema: https://azuremlschemas.azureedge.net/latest/environment.schema.json
+name: edgeforge-eval
+description: >
+  Evaluation environment. Runs under the eval managed identity -- the only
+  workload with a role assignment on the golden storage account, so test-set
+  leakage is prevented by IAM rather than by convention.
+
+build:
+  path: ../../../
+  dockerfile_path: pipelines/aml/environments/train.dockerfile
+
+tags:
+  golden_set_access: "true"
+  network_isolated: "true"

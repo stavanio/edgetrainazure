@@ -1,0 +1,17 @@
+$schema: https://azuremlschemas.azureedge.net/latest/environment.schema.json
+name: edgeforge-train
+description: >
+  Distributed training environment. The base image is pinned by digest in
+  train.dockerfile -- a floating tag makes an AML job irreproducible, which
+  invalidates the lineage claim the safety case rests on, and CI rejects it.
+
+build:
+  path: ../../../
+  dockerfile_path: pipelines/aml/environments/train.dockerfile
+
+tags:
+  cuda: "12.4"
+  torch: "2.4"
+  # Training compute has no internet route; packages come from a private feed
+  # reached over a private endpoint at image-build time only.
+  network_isolated: "true"

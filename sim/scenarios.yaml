@@ -1,0 +1,176 @@
+# Synthetic scenario catalogue.
+#
+# Real data cannot cover the tail. There is no ethical way to collect a thousand
+# examples of a person in the wrong place behind a moving haul vehicle in a dust
+# cloud -- and that is precisely the case that must not fail.
+#
+# Rendered headless by Isaac Sim on the Azure Batch spot pool. Output carries
+# pixel-perfect ground truth (masks, depth, instance IDs, 3D boxes) at zero
+# labeling cost, lands in /labeled tagged source=sim, and is NEVER permitted into
+# the evaluation set.
+#
+# Used for pre-training and tail-class oversampling only. Measured on this
+# workload: synthetic pre-training buys ~+6 mAP on rare classes and roughly
+# halves the real frames needed to reach a target -- but a model trained on
+# synthetic alone loses 20+ mAP the first time it meets real dust.
+
+version: 3
+
+randomization:
+  # Applied per rendered frame, not per scenario. Per-scenario randomization
+  # produces long runs of correlated frames that inflate the apparent dataset
+  # size without adding information.
+
+  illumination:
+    headlamp_count: [2, 4]
+    headlamp_aim_deg: {yaw: [-8, 8], pitch: [-12, 4]}
+    headlamp_colour_temp_k: [3200, 6500]
+    ambient_lux: [0.1, 400]
+    glare_sources: [0, 3]          # oncoming machines, fixed floods, reflectors
+
+  particulate:
+    density_g_m3: [0.0, 3.2]
+    mean_size_um: [1.0, 40.0]
+    motion_m_s: [0.0, 2.5]
+    # Whiteout frames ARE rendered, deliberately: the model must produce a high
+    # OOD score in them, which it cannot learn if it never sees one. They are
+    # excluded from the detection loss and used only for the OOD head.
+    render_whiteout_fraction: 0.04
+
+  surface:
+    wetness: [0.0, 1.0]
+    spillage_density: [0.0, 0.6]
+    rut_depth_cm: [0, 18]
+    standing_water_patches: [0, 5]
+    reflectance_variance: [0.05, 0.45]
+
+  geometry:
+    drift_width_m: [3.5, 7.0]
+    back_height_m: [3.0, 6.5]
+    rib_irregularity: [0.0, 0.8]
+    grade_pct: [-14, 14]
+    junction_probability: 0.22
+
+  actors:
+    personnel_count: [0, 4]
+    personnel_pose: [standing, walking, crouching, prone, climbing]
+    ppe_variant: [hi_vis_vest, full_coverall, wet_weather, dusty_worn]
+    # Worn, dust-covered PPE is the case that breaks naive personnel detectors:
+    # they key on retroreflective response, which is exactly what dust removes.
+    ppe_soiling: [0.0, 0.9]
+    machine_count: [0, 3]
+    machine_state: [parked, moving_toward, moving_away, articulating]
+
+  sensor:
+    exposure_us: [800, 12000]
+    gain_db: [0, 24]
+    motion_blur_px: [0, 9]
+    lens_contamination: [0.0, 0.5]
+    lidar_dropout_pct: [0, 35]
+    lidar_dust_returns: [0.0, 0.7]
+
+  extrinsics:
+    # +/-2 degrees of mount perturbation. Without this the model memorises the
+    # rig geometry and degrades on any vehicle whose mount has been serviced.
+    mount_perturbation_deg: [-2.0, 2.0]
+
+scenarios:
+
+  - id: personnel-behind-reversing-machine
+    priority: critical
+    frames: 24000
+    description: >
+      Person enters the blind zone behind a reversing haul vehicle. The canonical
+      case that must never fail, and the one real data cannot ethically provide.
+    constraints:
+      actors.personnel_count: [1, 2]
+      actors.machine_state: [moving_away]
+      particulate.density_g_m3: [0.4, 3.2]
+    taxonomy_cells:
+      - "dark|heavy|dry_compact|drift|both"
+      - "low|heavy|loose|junction|both"
+      - "dark|light|wet|decline|both"
+
+  - id: personnel-prone-low-light
+    priority: critical
+    frames: 12000
+    description: >
+      Prone or crouching person at low ambient. Thin in real data because it
+      mostly occurs during incidents, which is the worst possible time to be
+      collecting training examples.
+    constraints:
+      actors.personnel_pose: [prone, crouching]
+      illumination.ambient_lux: [0.1, 30]
+    taxonomy_cells:
+      - "dark|clear|dry_compact|drift|personnel"
+      - "dark|light|loose|chamber|personnel"
+
+  - id: soiled-ppe-detection
+    priority: high
+    frames: 18000
+    description: >
+      Heavily soiled PPE across the full dust range. Directly targets the
+      failure mode where a detector has learned retroreflective response rather
+      than human shape.
+    constraints:
+      actors.ppe_soiling: [0.5, 0.9]
+      particulate.density_g_m3: [0.8, 3.2]
+
+  - id: wet-decline-traversability
+    priority: high
+    frames: 15000
+    description: >
+      Standing water and wet spillage on grade. Longest stopping distance in the
+      operating domain, so drivable-surface errors cost the most here.
+    constraints:
+      geometry.grade_pct: [-14, -6]
+      surface.wetness: [0.6, 1.0]
+      surface.standing_water_patches: [2, 5]
+
+  - id: junction-occlusion
+    priority: medium
+    frames: 20000
+    description: >
+      Actors emerging from side drifts at junctions. Tests track stability and
+      time-to-detect rather than per-frame accuracy.
+    constraints:
+      geometry.junction_probability: 1.0
+      actors.machine_count: [1, 3]
+
+  - id: whiteout-ood
+    priority: medium
+    frames: 6000
+    description: >
+      Uninterpretable frames. Trains the OOD head only; detection loss is masked.
+      The correct behaviour here is a high OOD score, not a confident prediction.
+    constraints:
+      particulate.density_g_m3: [2.6, 3.2]
+    loss_mask: [hazard_seg, drivable_surface, personnel_det, equipment_anomaly]
+
+  - id: equipment-anomaly-catalogue
+    priority: medium
+    frames: 22000
+    description: >
+      Seeded equipment faults: hose rupture, guard displacement, hot bearing
+      signature, loose ground-engaging tooling, cable damage.
+    constraints:
+      actors.machine_count: [1, 2]
+      actors.machine_state: [parked, articulating]
+
+  - id: nominal-background
+    priority: low
+    frames: 40000
+    description: >
+      Empty, well-lit main drift. Cheap, plentiful in real data, and included
+      only so the synthetic mix does not itself become skewed toward hard cases
+      -- which would teach the model that hazards are common.
+
+batch:
+  pool: isaac-sim
+  container: ${ACR_LOGIN_SERVER}/sim/isaac-headless:2026.1.2
+  frames_per_task: 500
+  # Spot-only. Rendering is embarrassingly parallel and fully interruption
+  # tolerant; a preempted task costs one re-render of 500 frames.
+  priority: spot
+  output_datastore: labeled
+  output_prefix: source=sim/

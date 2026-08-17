@@ -1,0 +1,12 @@
+$schema: https://azuremlschemas.azureedge.net/latest/environment.schema.json
+name: edgeforge-curate
+description: >
+  CPU curation environment: quality gates, dedupe, PII redaction, stratified
+  sampling, and snapshot cutting. No GPU, no golden-set access.
+
+build:
+  path: ../../../
+  dockerfile_path: pipelines/aml/environments/curate.dockerfile
+
+tags:
+  network_isolated: "true"

@@ -1,0 +1,117 @@
+name: ci
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+  id-token: write        # OIDC federation to Azure; no stored secret anywhere
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  lint-and-test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e ".[dev]"
+
+      - name: Ruff
+        run: ruff check src deploy tests
+
+      - name: Format check
+        run: ruff format --check src deploy tests
+
+      - name: Type check
+        run: mypy src/edgeforge
+
+      - name: Unit tests
+        run: pytest -q --cov=edgeforge --cov-report=term-missing
+
+  no-floating-tags:
+    # A ':latest' base image makes a training run irreproducible, which
+    # invalidates the lineage claim the whole safety case rests on. This is a
+    # hard failure, not a warning.
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Reject floating image references
+        run: |
+          set -euo pipefail
+          if grep -rEn '^\s*FROM .*:(latest|main|dev)\s*$' \
+               --include='*.dockerfile' --include='Dockerfile*' . ; then
+            echo "::error::base images must be pinned by digest, not a floating tag"
+            exit 1
+          fi
+          if grep -rEn 'image":\s*"[^"]*:latest"' deploy/ ; then
+            echo "::error::edge module images must be pinned to a version"
+            exit 1
+          fi
+          echo "no floating image references"
+
+  terraform:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: "1.9.8"
+
+      - name: Format
+        run: terraform -chdir=infra fmt -check -recursive
+
+      - name: Init (no backend)
+        run: terraform -chdir=infra init -backend=false
+
+      - name: Validate
+        run: terraform -chdir=infra validate
+
+      - uses: aquasecurity/tfsec-action@v1.0.3
+        with:
+          working_directory: infra
+
+  manifests:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - run: pip install pyyaml check-jsonschema
+
+      - name: Validate rollout rings
+        run: python -c "
+          import yaml, pathlib;
+          d = yaml.safe_load(pathlib.Path('deploy/rollout/rings.yaml').read_text());
+          names = [r['name'] for r in d['rings']];
+          assert names == ['hil','canary','pilot','production'], names;
+          assert all(p['severity'] in {'low','medium','high','critical'} for p in d['rollback_predicates']);
+          print('rings ok:', names)"
+
+      - name: Validate IoT Edge deployment manifests
+        run: |
+          for f in deploy/iot-edge/*.json; do
+            python -c "import json,sys; json.load(open(sys.argv[1]))" "$f"
+            echo "ok: $f"
+          done
+
+      - name: Validate sim scenarios
+        run: python -c "
+          import yaml, pathlib;
+          d = yaml.safe_load(pathlib.Path('sim/scenarios.yaml').read_text());
+          crit = [s for s in d['scenarios'] if s['priority'] == 'critical'];
+          assert crit, 'no critical scenarios defined';
+          print(f\"{len(d['scenarios'])} scenarios, {len(crit)} critical\")"

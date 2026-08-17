@@ -1,0 +1,54 @@
+{
+  "$schema-template": "4.0.0",
+  "_comment": [
+    "Layered deployment: the perception module and its bundle reference, and",
+    "nothing else. This is what a model release actually changes.",
+    "",
+    "Applied at a higher priority than the base deployment and targeted by twin",
+    "tag ('tags.ring = ...'), so promoting a robot between rings is a twin patch",
+    "rather than a manifest edit. A robot that was offline converges when it",
+    "reconnects -- no job replay, no per-device bookkeeping.",
+    "",
+    "Create with:",
+    "  az iot edge deployment create --layered \\",
+    "    --deployment-id perception-${RELEASE_ID} --priority 20 \\",
+    "    --target-condition \"tags.ring = 'canary'\" \\",
+    "    --content deployment.layer.model.json"
+  ],
+  "modulesContent": {
+    "$edgeAgent": {
+      "properties.desired.modules.perception": {
+        "version": "1.0",
+        "type": "docker",
+        "status": "running",
+        "restartPolicy": "always",
+        "startupOrder": 15,
+        "settings": {
+          "image": "${ACR_LOGIN_SERVER}/edge/perception:${PERCEPTION_RUNTIME_VERSION}",
+          "createOptions": "{\"HostConfig\":{\"Binds\":[\"/mnt/nvme/bundles:/data/bundles\"],\"DeviceRequests\":[{\"Driver\":\"nvidia\",\"Count\":-1,\"Capabilities\":[[\"gpu\"]]}],\"Runtime\":\"nvidia\"}}"
+        },
+        "env": {
+          "_comment_bundle": "The engine, preprocessing config, and postprocessing config all come from the signed bundle -- never from the module image. Shipping preprocessing with the engine is what prevents train/serve skew.",
+          "BUNDLE_REFERENCE": { "value": "${BUNDLE_REFERENCE}" },
+
+          "_comment_verify": "Signature verification is mandatory and non-overridable. The module refuses to load a bundle that does not chain to the trust store pinned at manufacture.",
+          "REQUIRE_SIGNATURE": { "value": "true" },
+          "TRUST_STORE_PATH": { "value": "/etc/edgeforge/truststore" },
+
+          "_comment_lkg": "Previous bundles stay resident so rollback never needs a network. A robot underground must be able to roll back.",
+          "RETAIN_PREVIOUS_BUNDLES": { "value": "2" },
+
+          "_comment_shadow": "In shadow mode the new bundle runs alongside the incumbent and only the incumbent's output is wired to the vehicle. Costs latency headroom, so it is used for one ring, not indefinitely.",
+          "SHADOW_MODE": { "value": "${SHADOW_MODE}" },
+
+          "LATENCY_BUDGET_P99_MS": { "value": "45" },
+          "POWER_BUDGET_W": { "value": "40" }
+        }
+      }
+    },
+    "$edgeHub": {
+      "properties.desired.routes.perceptionHealth": "FROM /messages/modules/perception/outputs/health INTO $upstream",
+      "properties.desired.routes.shadowDisagreement": "FROM /messages/modules/perception/outputs/shadow_disagreement INTO BrokeredEndpoint(\"/modules/curator/inputs/signals\")"
+    }
+  }
+}

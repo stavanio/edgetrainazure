@@ -17,40 +17,40 @@ additive and safe. See docs/08-runbook.md §8.5 on silent taxonomy drift.
 
 from __future__ import annotations
 
+from collections.abc import Iterator
 from dataclasses import dataclass
 from enum import StrEnum
 from itertools import product
-from typing import Iterator
 
 
 class Illumination(StrEnum):
-    DARK = "dark"                # headlamps only, < 5 lux ambient
-    LOW = "low"                  # sparse fixed lighting
-    MIXED = "mixed"              # strong gradients, glare sources in frame
-    BRIGHT = "bright"            # well-lit workshop, portal, or surface
+    DARK = "dark"  # headlamps only, < 5 lux ambient
+    LOW = "low"  # sparse fixed lighting
+    MIXED = "mixed"  # strong gradients, glare sources in frame
+    BRIGHT = "bright"  # well-lit workshop, portal, or surface
 
 
 class Particulate(StrEnum):
     CLEAR = "clear"
     LIGHT = "light"
-    HEAVY = "heavy"              # visibility materially reduced
-    WHITEOUT = "whiteout"        # a human operator could not interpret the frame
+    HEAVY = "heavy"  # visibility materially reduced
+    WHITEOUT = "whiteout"  # a human operator could not interpret the frame
 
 
 class Surface(StrEnum):
     DRY_COMPACT = "dry_compact"
-    LOOSE = "loose"              # muck pile, spillage, fresh blast
+    LOOSE = "loose"  # muck pile, spillage, fresh blast
     WET = "wet"
     STANDING_WATER = "standing_water"
     ICE = "ice"
 
 
 class Geometry(StrEnum):
-    DRIFT = "drift"              # straight run
+    DRIFT = "drift"  # straight run
     JUNCTION = "junction"
-    DECLINE = "decline"          # non-trivial grade
-    CHAMBER = "chamber"          # large open volume, sparse returns
-    CONFINED = "confined"        # tight clearance both sides
+    DECLINE = "decline"  # non-trivial grade
+    CHAMBER = "chamber"  # large open volume, sparse returns
+    CONFINED = "confined"  # tight clearance both sides
 
 
 class Actors(StrEnum):
@@ -92,11 +92,14 @@ class Cell:
         )
 
     @classmethod
-    def from_key(cls, key: str) -> "Cell":
+    def from_key(cls, key: str) -> Cell:
         illum, part, surf, geom, act = key.split("|")
         return cls(
-            Illumination(illum), Particulate(part), Surface(surf),
-            Geometry(geom), Actors(act),
+            Illumination(illum),
+            Particulate(part),
+            Surface(surf),
+            Geometry(geom),
+            Actors(act),
         )
 
     @property
@@ -160,6 +163,7 @@ def sampling_floor(cell: Cell) -> int:
 # fleet's own distribution dominates -- and the fleet mostly drives down empty,
 # well-lit main drifts.
 CELL_SHARE_CEILING = 0.06
+
 
 # Slice-gate tolerance: how far a cell's metric may regress against the incumbent
 # regardless of aggregate movement. Safety-critical cells get no headroom at all.
