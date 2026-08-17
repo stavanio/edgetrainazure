@@ -1,0 +1,8 @@
+// B6 — rollbacks completing within 5 minutes of the twin patch.
+// 90-day window: rollbacks are rare, and a 28-day window swings wildly on a
+// denominator of two.
+declare query_parameters(window:timespan = 90d, budget:timespan = 5m);
+RolloutEvents_CL
+| where TimeGenerated > ago(window) and event_s == "rollback"
+| extend elapsed = completed_t - initiated_t
+| summarize good = countif(elapsed <= budget), valid = count()

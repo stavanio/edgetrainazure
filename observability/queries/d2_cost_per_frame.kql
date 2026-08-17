@@ -1,0 +1,8 @@
+declare query_parameters(window:timespan = 28d);
+let spend = toscalar(
+  PipelineEvents_CL
+  | where TimeGenerated > ago(window) and stage_s in ("autolabel", "human_adjudication")
+  | summarize sum(attributable_cost_usd_d));
+LabelQueue_CL
+| where TimeGenerated > ago(window) and isnotnull(adjudicated_t)
+| summarize numerator = spend, denominator = todouble(count())

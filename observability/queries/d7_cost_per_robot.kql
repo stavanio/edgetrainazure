@@ -1,0 +1,15 @@
+// D7 — the board number. Objective is a DIRECTION, not a level: the absolute
+// figure depends on fleet size, so a threshold would be meaningless. The claim
+// under test is that unit economics improve as the fleet grows.
+// Returns a daily series; slo.py fits the regression slope.
+declare query_parameters(window:timespan = 90d);
+let robots = FleetHealth_CL
+  | where TimeGenerated > ago(window)
+  | summarize active = dcount(device_id_s) by bin(TimeGenerated, 1d);
+PipelineEvents_CL
+| where TimeGenerated > ago(window)
+| summarize spend = sum(attributable_cost_usd_d) by bin(TimeGenerated, 1d)
+| join kind=inner robots on TimeGenerated
+| extend x_days = todouble(datetime_diff('day', TimeGenerated, ago(window)))
+| project x_days, y_value = 30.0 * spend / todouble(active)
+| order by x_days asc

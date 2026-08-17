@@ -1,0 +1,7 @@
+// C5 — the weekly canary re-run. Target is 1.0, but this is an SLO and not an
+// invariant: one flake is a ticket, two in a window means the environment has
+// drifted and the lineage claim is at risk.
+declare query_parameters(window:timespan = 90d, tolerance:real = 0.002);
+PipelineEvents_CL
+| where TimeGenerated > ago(window) and stage_s == "reproducibility_canary"
+| summarize good = countif(abs(metric_delta_d) <= tolerance), valid = count()

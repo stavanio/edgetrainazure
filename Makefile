@@ -14,6 +14,7 @@ AZ_WORKSPACE      ?= mlw-edgefrg-dev
 AZ_REGISTRY       ?= mlr-edgefrg
 AZ_IOTHUB         ?= iot-edgefrg-dev
 AZ_ACR            ?= acredgefrgdev.azurecr.io
+AZ_GRAFANA        ?= graf-edgefrg-dev
 
 AML := az ml --resource-group $(AZ_RESOURCE_GROUP) --workspace-name $(AZ_WORKSPACE)
 GIT_SHA := $(shell git rev-parse --short HEAD 2>/dev/null || echo unknown)
@@ -38,6 +39,14 @@ register-aml: ## Register environments, components, and the scenario taxonomy
 	$(AML) environment create -f pipelines/aml/environments/eval.yml
 	$(AML) environment create -f pipelines/aml/environments/curate.yml
 	@echo "registered environments at commit $(GIT_SHA)"
+
+.PHONY: register-observability
+register-observability: ## Apply SLO dashboards to Managed Grafana
+	@for d in observability/dashboards/*.json; do \
+	  echo "applying $$d"; \
+	  az grafana dashboard update -n $(AZ_GRAFANA) --definition "@$$d" --overwrite true >/dev/null; \
+	done
+	@echo "dashboards applied; edit them in git, not in the UI (editable=false)"
 
 .PHONY: env
 env: ## Print the .env block to copy from terraform output
@@ -126,6 +135,23 @@ twin-patch: ## Retune fleet curiosity without a deployment
 	  --set 'properties.desired.$(KEY)=$(VALUE)'
 	@echo "patched $(KEY)=$(VALUE) on ring $(RING); effective next shift"
 
+##@ Observability
+
+.PHONY: slo-report
+slo-report: ## Evaluate every SLI and print the release posture (exit 0/1/2)
+	python -m edgeforge.fleet.report --workspace-id $(AZ_LOG_ANALYTICS_WORKSPACE_ID) $(if $(GROUP),--group $(GROUP),)
+
+.PHONY: slo-publish
+slo-publish: ## Evaluate and write results to SloStatus_CL for the dashboards
+	python -m edgeforge.fleet.report --workspace-id $(AZ_LOG_ANALYTICS_WORKSPACE_ID) --publish
+
+.PHONY: slo-gate
+slo-gate: ## CI gate: fail if the error-budget policy forbids shipping
+	@python -m edgeforge.fleet.report --workspace-id $(AZ_LOG_ANALYTICS_WORKSPACE_ID) --json > outputs/slo.json; \
+	  code=$$?; \
+	  if [ $$code -eq 2 ]; then echo "::error::release posture is FREEZE"; fi; \
+	  exit $$code
+
 ##@ Development
 
 .PHONY: test
@@ -137,6 +163,7 @@ lint: ## Lint, format check, and type check
 	ruff check src deploy tests
 	ruff format --check src deploy tests
 	mypy src/edgeforge
+	python observability/validate.py
 
 .PHONY: fmt
 fmt: ## Auto-format

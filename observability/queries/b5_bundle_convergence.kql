@@ -1,0 +1,14 @@
+// B5 — did devices converge on the bundle the rollout intended?
+// Denominator is devices that were ONLINE and had the opportunity to converge.
+// Twin desired-state is convergent, so a device that was underground during the
+// rollout is not a failure — it converges when it surfaces.
+declare query_parameters(window:timespan = 28d, settle:timespan = 4h);
+let intended = RolloutEvents_CL
+  | where TimeGenerated > ago(window)
+  | project release_id_s, ring_s, intended_bundle_s = bundle_s, rollout_at = TimeGenerated;
+FleetHealth_CL
+| where TimeGenerated > ago(window)
+| join kind=inner intended on $left.release_id_s == $right.release_id_s
+| where TimeGenerated between (rollout_at + settle .. rollout_at + settle + 1h)
+| summarize arg_max(TimeGenerated, bundle_s, intended_bundle_s) by device_id_s, release_id_s
+| summarize good = countif(bundle_s == intended_bundle_s), valid = count()

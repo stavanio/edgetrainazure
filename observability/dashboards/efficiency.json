@@ -1,0 +1,296 @@
+{
+  "uid": "edgeforge-efficiency",
+  "title": "edgeforge — Efficiency & Unit Economics",
+  "description": "What does it cost, and which way is it going? Audience: engineering leadership, finance. Panels map to SLIs D1-D7.",
+  "tags": ["edgeforge", "efficiency", "cost", "slo"],
+  "timezone": "utc",
+  "refresh": "1h",
+  "schemaVersion": 39,
+  "editable": false,
+  "time": { "from": "now-90d", "to": "now" },
+
+  "__comment_axes": [
+    "No dual-axis panels anywhere on this dashboard. Dollars and percentages are",
+    "never plotted against two y-scales — comparisons are indexed to a common",
+    "base instead. A dual-axis cost chart is the fastest way to make a trend say",
+    "whatever the reader already believed."
+  ],
+
+  "panels": [
+    {
+      "__comment": "Hero number. This is the figure that goes in a board pack, so it gets the whole top-left and nothing competes with it.",
+      "type": "stat",
+      "title": "Cost per robot-month",
+      "description": "D7. The objective is a DIRECTION, not a level — the absolute figure depends on fleet size, so a threshold would be meaningless. The claim under test is that unit economics improve as the fleet grows. Evaluated as a 90-day regression slope; must not be positive.",
+      "gridPos": { "h": 7, "w": 8, "x": 0, "y": 0 },
+      "options": {
+        "graphMode": "area",
+        "colorMode": "value",
+        "textMode": "value_and_name",
+        "justifyMode": "center",
+        "reduceOptions": { "calcs": ["lastNotNull"] }
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "currencyUSD",
+          "decimals": 0,
+          "color": { "mode": "fixed", "fixedColor": "#3987e5" }
+        }
+      },
+      "targets": [
+        { "queryType": "Azure Log Analytics", "azureLogAnalytics": { "queryFile": "../queries/d7_cost_per_robot.kql" } }
+      ]
+    },
+
+    {
+      "type": "stat",
+      "title": "90-day trend",
+      "description": "The slope of the hero number. Negative is the objective. Status colour is paired with an explicit up/down word — never colour alone.",
+      "gridPos": { "h": 7, "w": 4, "x": 8, "y": 0 },
+      "options": { "graphMode": "none", "colorMode": "value", "reduceOptions": { "calcs": ["lastNotNull"] } },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "currencyUSD",
+          "decimals": 2,
+          "mappings": [
+            { "type": "range", "options": { "from": -100000, "to": 0, "result": { "text": "falling ↓", "color": "#0ca30c", "index": 0 } } },
+            { "type": "range", "options": { "from": 0, "to": 100000, "result": { "text": "RISING ↑", "color": "#d03b3b", "index": 1 } } }
+          ]
+        }
+      },
+      "targets": [
+        {
+          "queryType": "Azure Log Analytics",
+          "azureLogAnalytics": {
+            "query": "SloStatus_CL\n| where TimeGenerated > ago(2h) and slo_id_s == 'D7'\n| summarize arg_max(TimeGenerated, observed_d)\n| project slope_usd_per_day = observed_d"
+          }
+        }
+      ]
+    },
+
+    {
+      "type": "stat",
+      "title": "Label auto-accept rate",
+      "description": "D1. The single biggest cost lever in the platform: each point is roughly $350/month at the 40-robot design point. Objective >= 70%.",
+      "gridPos": { "h": 7, "w": 4, "x": 12, "y": 0 },
+      "options": { "graphMode": "area", "colorMode": "value", "reduceOptions": { "calcs": ["lastNotNull"] } },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percentunit",
+          "decimals": 1,
+          "min": 0.5,
+          "max": 0.9,
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "#d03b3b", "value": null },
+              { "color": "#fab219", "value": 0.7 },
+              { "color": "#0ca30c", "value": 0.75 }
+            ]
+          }
+        }
+      },
+      "targets": [
+        { "queryType": "Azure Log Analytics", "azureLogAnalytics": { "queryFile": "../queries/d1_auto_accept.kql" } }
+      ]
+    },
+
+    {
+      "type": "stat",
+      "title": "Cost per labeled frame",
+      "description": "D2. Ceiling $0.32. Falls as the auto-accept rate rises — these two panels move together, which is the point of putting them side by side.",
+      "gridPos": { "h": 7, "w": 4, "x": 16, "y": 0 },
+      "options": { "graphMode": "area", "colorMode": "value", "reduceOptions": { "calcs": ["lastNotNull"] } },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "currencyUSD",
+          "decimals": 3,
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "#0ca30c", "value": null },
+              { "color": "#fab219", "value": 0.28 },
+              { "color": "#d03b3b", "value": 0.32 }
+            ]
+          }
+        }
+      },
+      "targets": [
+        { "queryType": "Azure Log Analytics", "azureLogAnalytics": { "queryFile": "../queries/d2_cost_per_frame.kql" } }
+      ]
+    },
+
+    {
+      "type": "stat",
+      "title": "Cost per production release",
+      "description": "D6. Ceiling $34k over 90 days. Every pipeline event carries attributable_cost_usd, which is what makes this a measurement rather than a monthly reconciliation exercise.",
+      "gridPos": { "h": 7, "w": 4, "x": 20, "y": 0 },
+      "options": { "graphMode": "area", "colorMode": "value", "reduceOptions": { "calcs": ["lastNotNull"] } },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "currencyUSD",
+          "decimals": 0,
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "#0ca30c", "value": null },
+              { "color": "#fab219", "value": 30000 },
+              { "color": "#d03b3b", "value": 34000 }
+            ]
+          }
+        }
+      },
+      "targets": [
+        { "queryType": "Azure Log Analytics", "azureLogAnalytics": { "queryFile": "../queries/d6_cost_per_release.kql" } }
+      ]
+    },
+
+    {
+      "__comment": [
+        "Stacked area, spend by stage. 2px surface gap between stacked segments.",
+        "Three categorical slots only — past three the all-pairs colour floors",
+        "cannot be met, so the long tail folds into 'other' rather than",
+        "generating a fourth hue."
+      ],
+      "type": "timeseries",
+      "title": "Spend by stage",
+      "description": "Labeling dominates and is the line most sensitive to engineering effort. Everything below 'other' is aggregated deliberately: a fourth series here would need a hue that cannot be told apart from the third under colour-vision deficiency.",
+      "gridPos": { "h": 9, "w": 14, "x": 0, "y": 7 },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "currencyUSD",
+          "custom": {
+            "lineWidth": 1,
+            "fillOpacity": 85,
+            "stacking": { "mode": "normal", "group": "spend" },
+            "showPoints": "never"
+          }
+        },
+        "overrides": [
+          { "matcher": { "id": "byName", "options": "labeling" }, "properties": [{ "id": "color", "value": { "mode": "fixed", "fixedColor": "#3987e5" } }] },
+          { "matcher": { "id": "byName", "options": "training" }, "properties": [{ "id": "color", "value": { "mode": "fixed", "fixedColor": "#d95926" } }] },
+          { "matcher": { "id": "byName", "options": "storage" }, "properties": [{ "id": "color", "value": { "mode": "fixed", "fixedColor": "#199e70" } }] },
+          { "matcher": { "id": "byName", "options": "other" }, "properties": [{ "id": "color", "value": { "mode": "fixed", "fixedColor": "#898781" } }] }
+        ]
+      },
+      "options": {
+        "legend": { "displayMode": "list", "placement": "bottom", "showLegend": true, "calcs": ["sum"] },
+        "tooltip": { "mode": "multi", "sort": "desc" }
+      },
+      "targets": [
+        {
+          "queryType": "Azure Log Analytics",
+          "azureLogAnalytics": {
+            "query": "PipelineEvents_CL\n| where $__timeFilter(TimeGenerated)\n| extend bucket = case(\n    stage_s in ('autolabel', 'human_adjudication'), 'labeling',\n    stage_s in ('pretrain', 'finetune', 'distill', 'sweep'), 'training',\n    stage_s == 'storage', 'storage',\n    'other')\n| summarize spend = sum(attributable_cost_usd_d) by bucket, bin(TimeGenerated, 1d)\n| order by TimeGenerated asc",
+            "resultFormat": "time_series"
+          }
+        }
+      ]
+    },
+
+    {
+      "type": "bargauge",
+      "title": "Compute efficiency",
+      "description": "D4 GPU utilization (allocated, not provisioned — a cluster scaled to zero is not idle capacity) and D5 spot share. Final training runs are excluded from D5's denominator: a preempted 40-hour job costs more than spot saves.",
+      "gridPos": { "h": 9, "w": 10, "x": 14, "y": 7 },
+      "options": {
+        "displayMode": "gradient",
+        "orientation": "horizontal",
+        "showUnfilled": true,
+        "reduceOptions": { "calcs": ["lastNotNull"] }
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percentunit",
+          "min": 0,
+          "max": 1,
+          "decimals": 1,
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "#d03b3b", "value": null },
+              { "color": "#fab219", "value": 0.65 },
+              { "color": "#0ca30c", "value": 0.8 }
+            ]
+          }
+        }
+      },
+      "targets": [
+        {
+          "queryType": "Azure Log Analytics",
+          "azureLogAnalytics": {
+            "query": "AmlComputeJobEvent\n| where TimeGenerated > ago(28d)\n| summarize\n    ['GPU utilization'] = sum(GpuSecondsBusy) / sum(GpuSecondsAllocated),\n    ['Spot share (interruptible)'] = sumif(GpuHours, Priority == 'LowPriority') / sumif(GpuHours, JobType in ('sweep','simulation','batch_inference'))"
+          }
+        }
+      ]
+    },
+
+    {
+      "__comment": "Indexed to a common base rather than a second axis — the whole reason this panel is legible.",
+      "type": "timeseries",
+      "title": "Unit economics, indexed to day 0 = 100",
+      "description": "Cost per robot-month, cost per labeled frame, and cost per release on one indexed scale. The claim to read off this panel: all three should trend down while fleet size trends up.",
+      "gridPos": { "h": 9, "w": 24, "x": 0, "y": 16 },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "decimals": 0,
+          "custom": { "lineWidth": 2, "fillOpacity": 0, "showPoints": "never", "axisLabel": "index (day 0 = 100)" }
+        },
+        "overrides": [
+          { "matcher": { "id": "byName", "options": "cost_per_robot_month" }, "properties": [{ "id": "color", "value": { "mode": "fixed", "fixedColor": "#3987e5" } }] },
+          { "matcher": { "id": "byName", "options": "cost_per_labeled_frame" }, "properties": [{ "id": "color", "value": { "mode": "fixed", "fixedColor": "#d95926" } }] },
+          { "matcher": { "id": "byName", "options": "cost_per_release" }, "properties": [{ "id": "color", "value": { "mode": "fixed", "fixedColor": "#199e70" } }] }
+        ]
+      },
+      "options": {
+        "legend": { "displayMode": "list", "placement": "bottom", "showLegend": true, "calcs": ["last"] },
+        "tooltip": { "mode": "multi", "sort": "none" }
+      },
+      "targets": [
+        {
+          "queryType": "Azure Log Analytics",
+          "azureLogAnalytics": {
+            "query": "UnitEconomics_CL\n| where $__timeFilter(TimeGenerated)\n| order by TimeGenerated asc\n| extend base_robot = toscalar(UnitEconomics_CL | top 1 by TimeGenerated asc | project cost_per_robot_month_d)\n| extend base_frame = toscalar(UnitEconomics_CL | top 1 by TimeGenerated asc | project cost_per_labeled_frame_d)\n| extend base_release = toscalar(UnitEconomics_CL | top 1 by TimeGenerated asc | project cost_per_release_d)\n| project TimeGenerated,\n    cost_per_robot_month = 100.0 * cost_per_robot_month_d / base_robot,\n    cost_per_labeled_frame = 100.0 * cost_per_labeled_frame_d / base_frame,\n    cost_per_release = 100.0 * cost_per_release_d / base_release",
+            "resultFormat": "time_series"
+          }
+        }
+      ]
+    },
+
+    {
+      "type": "table",
+      "title": "SLO status — efficiency group",
+      "description": "Generated by src/edgeforge/fleet/slo.py. A breach here is a cost conversation, not an incident — but it is on a dashboard for the same reason everything else is.",
+      "gridPos": { "h": 8, "w": 24, "x": 0, "y": 25 },
+      "options": { "showHeader": true, "cellHeight": "sm" },
+      "fieldConfig": {
+        "defaults": { "custom": { "align": "left" } },
+        "overrides": [
+          {
+            "matcher": { "id": "byName", "options": "status" },
+            "properties": [
+              {
+                "id": "mappings",
+                "value": [
+                  { "type": "value", "options": { "meeting": { "text": "meeting", "color": "#0ca30c", "index": 0 } } },
+                  { "type": "value", "options": { "at_risk": { "text": "AT RISK", "color": "#fab219", "index": 1 } } },
+                  { "type": "value", "options": { "breaching": { "text": "BREACHING", "color": "#d03b3b", "index": 2 } } }
+                ]
+              },
+              { "id": "custom.cellOptions", "value": { "type": "color-text" } }
+            ]
+          }
+        ]
+      },
+      "targets": [
+        {
+          "queryType": "Azure Log Analytics",
+          "azureLogAnalytics": {
+            "query": "SloStatus_CL\n| where TimeGenerated > ago(2h) and group_s == 'efficiency'\n| summarize arg_max(TimeGenerated, *) by slo_id_s\n| project id = slo_id_s, indicator = name_s, observed = observed_d, objective = objective_d, budget_remaining_pct = budget_remaining_pct_d, status = status_s\n| order by id asc"
+          }
+        }
+      ]
+    }
+  ]
+}

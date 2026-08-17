@@ -1,0 +1,10 @@
+// Every pipeline event carries attributable_cost_usd, which is what makes this
+// a measurement rather than a monthly reconciliation exercise.
+declare query_parameters(window:timespan = 90d);
+let releases = toscalar(
+  PipelineEvents_CL
+  | where TimeGenerated > ago(window) and stage_s == "rollout_production" and status_s == "completed"
+  | dcount(release_id_s));
+PipelineEvents_CL
+| where TimeGenerated > ago(window)
+| summarize numerator = sum(attributable_cost_usd_d), denominator = todouble(releases)

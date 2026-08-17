@@ -1,0 +1,6 @@
+// "Unattended" is the point: a job that succeeded after someone re-ran it by
+// hand at 2am did not succeed for the purposes of this SLI.
+declare query_parameters(window:timespan = 28d);
+PipelineEvents_CL
+| where TimeGenerated > ago(window) and stage_s == "curation"
+| summarize good = countif(status_s == "passed" and actor_s == "automated"), valid = count()

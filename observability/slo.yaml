@@ -1,0 +1,346 @@
+# SLI/SLO catalogue — the single source of truth.
+#
+# Consumed by:
+#   src/edgeforge/fleet/slo.py        evaluation, error budgets, burn rate, posture
+#   infra/observability.tf            Azure Monitor scheduled query rules
+#   observability/dashboards/*.json   panel thresholds and objective lines
+#
+# Adding an SLI is additive. Changing a target or a window resets the error
+# budget for that indicator -- record why in `rationale`, because six months
+# later "why is this 99.5 and not 99.9" is always the first question.
+
+version: 2
+
+# Burn-rate alerting policy. Both the long and short window must be burning for
+# an alert to fire; the short window is what stops an alert persisting long
+# after the problem resolved.
+burn_rate_policy:
+  - severity: page
+    burn_rate: 14.4
+    long_window: PT1H
+    short_window: PT5M
+    budget_consumed_pct: 2
+  - severity: page
+    burn_rate: 6.0
+    long_window: PT6H
+    short_window: PT30M
+    budget_consumed_pct: 5
+  - severity: ticket
+    burn_rate: 3.0
+    long_window: P1D
+    short_window: PT2H
+    budget_consumed_pct: 10
+  - severity: ticket
+    burn_rate: 1.0
+    long_window: P3D
+    short_window: PT6H
+    budget_consumed_pct: 10
+
+# Error-budget policy. Encoded in slo.py::release_posture -- this is a rule, not
+# a suggestion. A budget that is never spent means the objective is too loose.
+budget_policy:
+  healthy_above_pct: 50      # ship normally
+  constrained_above_pct: 10  # ship, but no discretionary edge-plane changes
+  # below constrained_above_pct: freeze the affected plane until it recovers
+
+# ---------------------------------------------------------------------------
+# Group A -- Safety. INVARIANTS: no error budget, no burn rate, no negotiation.
+# A percentage target here would be a category error.
+# ---------------------------------------------------------------------------
+invariants:
+  - id: A1
+    name: missed_personnel
+    description: Any frame with a person undetected inside the safety envelope
+    scope: [field, replay_suite]
+    breach_action: block_release_fleetwide
+    on_breach: Frame is added to the golden set permanently; runbook P1.
+
+  - id: A2
+    name: bundle_signature
+    description: Any device running a bundle that fails signature verification
+    scope: [field]
+    breach_action: quarantine_device
+    on_breach: Supply-chain incident; trust store and registry audited.
+
+  - id: A3
+    name: safety_envelope
+    description: Safety-envelope violation attributed to perception
+    scope: [field]
+    breach_action: rollback_ring
+    on_breach: Immediate automatic rollback; runbook P1.
+
+  - id: A4
+    name: golden_set_isolation
+    description: Training identity holding read access to the golden storage account
+    scope: [control_plane]
+    breach_action: block_release_fleetwide
+    on_breach: Every model registered since the grant is re-evaluated.
+
+# ---------------------------------------------------------------------------
+# Groups B/C/D -- genuine SLOs with genuine error budgets.
+# `good` / `valid` name the numerator and denominator explicitly: an
+# "availability" SLI with an unstated denominator is not an SLI.
+# ---------------------------------------------------------------------------
+slos:
+
+  # --- Group B: fleet reliability ---
+  - id: B1
+    group: fleet
+    name: perception_availability
+    good: shift_minutes_detecting
+    valid: shift_minutes_operating
+    target: 0.995
+    window: P28D
+    query: queries/b1_perception_availability.kql
+    rationale: >
+      A robot with perception down is a robot under manual control, not a robot
+      stopped. 99.5% over 28 days is ~3.4 h of degraded operation per robot.
+
+  - id: B2
+    group: fleet
+    name: inference_latency
+    good: frames_under_budget
+    valid: frames_inferred
+    target: 0.99
+    window: P28D
+    query: queries/b2_inference_latency.kql
+    rationale: >
+      45 ms p99 is the perception budget from the vehicle latency chain. The 1%
+      allowance covers thermal transients, not sustained overrun.
+
+  - id: B3
+    group: fleet
+    name: frame_completeness
+    good: frames_inferred
+    valid: frames_captured
+    target: 0.995
+    window: P28D
+    query: queries/b3_frame_completeness.kql
+
+  - id: B4
+    group: fleet
+    name: thermal_headroom
+    good: sample_minutes_unthrottled
+    valid: sample_minutes_operating
+    target: 0.99
+    window: P28D
+    query: queries/b4_thermal_headroom.kql
+    rationale: >
+      Throttling makes every latency figure untrustworthy, so this is measured
+      separately rather than folded into B2.
+
+  - id: B5
+    group: fleet
+    name: bundle_convergence
+    good: devices_on_intended_bundle
+    valid: devices_online_4h_post_rollout
+    target: 0.99
+    window: P28D
+    query: queries/b5_bundle_convergence.kql
+    rationale: >
+      Twin desired-state is convergent, so a device offline during a rollout is
+      not a failure -- the denominator is devices that were online and had the
+      opportunity to converge.
+
+  - id: B6
+    group: fleet
+    name: rollback_latency
+    good: rollbacks_within_5min
+    valid: rollbacks_initiated
+    target: 0.99
+    window: P90D
+    query: queries/b6_rollback_latency.kql
+    rationale: >
+      90-day window because rollbacks are rare; a 28-day window would swing wildly
+      on a denominator of two.
+
+  - id: B7
+    group: fleet
+    name: model_freshness
+    good: devices_within_two_releases
+    valid: devices_in_fleet
+    target: 0.95
+    window: P28D
+    query: queries/b7_model_freshness.kql
+
+  # --- Group C: pipeline health ---
+  - id: C1
+    group: pipeline
+    name: t0_event_delivery
+    good: safety_events_landed_within_24h
+    valid: safety_events_recorded
+    target: 0.999
+    window: P28D
+    query: queries/c1_t0_delivery.kql
+    rationale: >
+      T0 is evidence. Losing one to a full ring buffer is the worst outcome the
+      curator can produce, hence three nines against every other stream's two.
+
+  - id: C2
+    group: pipeline
+    name: ingest_freshness
+    good: t1_shards_curated_within_36h
+    valid: t1_shards_uploaded
+    target: 0.95
+    window: P28D
+    query: queries/c2_ingest_freshness.kql
+
+  - id: C3
+    group: pipeline
+    name: curation_success
+    good: curation_jobs_unattended
+    valid: curation_jobs_started
+    target: 0.98
+    window: P28D
+    query: queries/c3_curation_success.kql
+
+  - id: C4
+    group: pipeline
+    name: label_queue_latency
+    good: frames_adjudicated_within_72h
+    valid: frames_routed_to_humans
+    target: 0.90
+    window: P28D
+    query: queries/c4_label_queue_latency.kql
+    rationale: >
+      Adjudication is the longest pole in the 11-day loop. 90% is deliberately
+      loose: tightening it buys loop time only if annotator capacity moves too.
+
+  - id: C5
+    group: pipeline
+    name: training_reproducibility
+    good: canary_reruns_within_tolerance
+    valid: canary_reruns
+    target: 1.0
+    window: P90D
+    query: queries/c5_reproducibility.kql
+    rationale: >
+      Target is 1.0 but this is an SLO, not an invariant: a single flake is a
+      ticket, not a fleet freeze. Two in a window means the environment has
+      drifted and the lineage claim is at risk.
+
+  - id: C6
+    group: pipeline
+    name: gate_evidence_completeness
+    good: releases_with_full_evidence
+    valid: releases
+    target: 1.0
+    window: P90D
+    query: queries/c6_gate_evidence.kql
+
+  - id: C7
+    group: pipeline
+    name: loop_time
+    good: loops_within_11_days
+    valid: loops_completed
+    target: 0.80
+    window: P90D
+    query: queries/c7_loop_time.kql
+    rationale: >
+      Nine of the eleven days are automated; the two human steps are deliberately
+      human. 80% acknowledges that adjudication and promotion review are staffed,
+      not instant.
+
+  # --- Group D: efficiency and unit economics ---
+  # Same structure, same budgets. A breach is a cost conversation, not an
+  # incident -- but it is on the same dashboards deliberately, because separating
+  # "is it working" from "what does it cost" is how platforms become unaffordable.
+  - id: D1
+    group: efficiency
+    name: label_auto_accept_rate
+    good: frames_auto_accepted
+    valid: frames_labeled
+    target: 0.70
+    window: P28D
+    query: queries/d1_auto_accept.kql
+    rationale: >
+      The single biggest cost lever in the platform. Each point is roughly
+      $350/month at the 40-robot design point.
+
+  - id: D2
+    group: efficiency
+    name: cost_per_labeled_frame
+    kind: ratio_threshold          # not a good/valid fraction
+    numerator: labeling_spend_usd
+    denominator: frames_added_to_labeled
+    target_max: 0.32
+    window: P28D
+    query: queries/d2_cost_per_frame.kql
+
+  - id: D3
+    group: efficiency
+    name: uplink_yield
+    good: frames_surviving_to_curated
+    valid: frames_uploaded
+    target: 0.40
+    window: P28D
+    query: queries/d3_uplink_yield.kql
+    rationale: >
+      Measures whether on-robot triage is choosing well. A falling yield means the
+      fleet is uploading things the cloud then discards -- retune the twin
+      thresholds before buying more uplink.
+
+  - id: D4
+    group: efficiency
+    name: gpu_utilization
+    good: gpu_seconds_busy
+    valid: gpu_seconds_allocated
+    target: 0.65
+    window: P28D
+    query: queries/d4_gpu_utilization.kql
+
+  - id: D5
+    group: efficiency
+    name: interruptible_compute_share
+    good: spot_gpu_hours
+    valid: interruptible_eligible_gpu_hours
+    target: 0.90
+    window: P28D
+    query: queries/d5_spot_share.kql
+    rationale: >
+      Simulation and sweeps are fully interruption tolerant. Final training runs
+      are excluded from the denominator -- a preempted 40-hour job costs more than
+      spot saves.
+
+  - id: D6
+    group: efficiency
+    name: cost_per_production_release
+    kind: ratio_threshold
+    numerator: attributable_spend_usd
+    denominator: releases_reaching_production
+    target_max: 34000
+    window: P90D
+    query: queries/d6_cost_per_release.kql
+
+  - id: D7
+    group: efficiency
+    name: cost_per_robot_month
+    kind: trend                    # objective is a direction, not a threshold
+    numerator: platform_spend_usd
+    denominator: active_robots
+    target_slope_max: 0.0          # 90-day regression slope must not be positive
+    window: P90D
+    query: queries/d7_cost_per_robot.kql
+    rationale: >
+      The absolute number depends on fleet size, so a threshold would be
+      meaningless. The slope is the claim: unit economics improve as the fleet
+      grows. This is the number for a board pack.
+
+# Dashboard inventory. Each answers exactly one question; a dashboard that
+# answers two answers neither.
+dashboards:
+  - id: fleet-health
+    question: Is the fleet safe right now?
+    audience: [on-call, ops-supervisor]
+    refresh: 1m
+    slis: [A1, A2, A3, B1, B2, B3, B4, B5]
+  - id: pipeline-health
+    question: Is the loop turning, and where is it stuck?
+    audience: [platform, ml]
+    refresh: 5m
+    slis: [C1, C2, C3, C4, C5, C6, C7, D3]
+  - id: efficiency
+    question: What does it cost, and which way is it going?
+    audience: [engineering-leadership, finance]
+    refresh: 1h
+    slis: [D1, D2, D4, D5, D6, D7]

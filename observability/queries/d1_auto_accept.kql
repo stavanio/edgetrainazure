@@ -1,0 +1,6 @@
+// D1 — the single biggest cost lever in the platform. Each point is roughly
+// $350/month at the 40-robot design point.
+declare query_parameters(window:timespan = 28d);
+LabelQueue_CL
+| where TimeGenerated > ago(window)
+| summarize good = countif(route_s == "auto_accept"), valid = count()

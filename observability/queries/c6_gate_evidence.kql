@@ -1,0 +1,8 @@
+// C6 — every release must carry complete slice AND closed-loop evidence.
+// A release evaluated on aggregates alone is not evidence of anything.
+declare query_parameters(window:timespan = 90d);
+PipelineEvents_CL
+| where TimeGenerated > ago(window) and stage_s == "gate_evaluation"
+| summarize
+    good  = countif(slices_evaluated_d > 0 and scenarios_run_d >= 1500),
+    valid = count()

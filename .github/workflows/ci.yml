@@ -108,6 +108,13 @@ jobs:
             echo "ok: $f"
           done
 
+      - name: Validate the SLO catalogue and dashboards
+        # slo.yaml is the single source of truth for the dashboards, the Azure
+        # Monitor rules, and slo.py. A dangling query reference or a dashboard
+        # listing an indicator that no longer exists must fail here, not at
+        # terraform apply time.
+        run: python observability/validate.py
+
       - name: Validate sim scenarios
         run: python -c "
           import yaml, pathlib;

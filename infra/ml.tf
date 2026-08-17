@@ -66,7 +66,7 @@ resource "azurerm_machine_learning_workspace" "main" {
 
   public_network_access_enabled = false
   # Outbound is allow-listed to ACR and the private package feed only. A training
-  # job cannot reach the internet; see docs/06-security-and-governance.md.
+  # job cannot reach the internet; see docs/05-security-and-governance.md.
   managed_network {
     isolation_mode = "AllowOnlyApprovedOutbound"
   }

@@ -1,0 +1,5 @@
+// Allocated, not provisioned: a cluster scaled to zero is not idle capacity.
+declare query_parameters(window:timespan = 28d);
+AmlComputeJobEvent
+| where TimeGenerated > ago(window)
+| summarize good = sum(GpuSecondsBusy), valid = sum(GpuSecondsAllocated)

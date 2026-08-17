@@ -1,0 +1,10 @@
+// B4 — thermal headroom. Measured separately from B2 on purpose: throttling
+// makes every latency figure untrustworthy, so folding it into the latency SLI
+// would let a thermal fault masquerade as a model regression.
+declare query_parameters(window:timespan = 28d);
+FleetHealth_CL
+| where TimeGenerated > ago(window)
+| extend minutes = operating_seconds_d / 60.0
+| summarize
+    good  = sum(minutes * (1.0 - throttled_pct_d / 100.0)),
+    valid = sum(minutes)

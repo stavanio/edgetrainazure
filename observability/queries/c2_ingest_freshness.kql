@@ -1,0 +1,5 @@
+declare query_parameters(window:timespan = 28d, budget:timespan = 36h);
+PipelineEvents_CL
+| where TimeGenerated > ago(window) and stage_s == "curation" and tier_s == "t1"
+| extend age = ended_t - uploaded_t
+| summarize good = countif(age <= budget), valid = count()

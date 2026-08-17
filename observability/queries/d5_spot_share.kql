@@ -1,0 +1,7 @@
+// Final training runs are excluded from the denominator: a preempted 40-hour
+// job costs more than spot saves, so running it dedicated is correct, not a miss.
+declare query_parameters(window:timespan = 28d);
+AmlComputeJobEvent
+| where TimeGenerated > ago(window)
+| where JobType in ("sweep", "simulation", "batch_inference")
+| summarize good = sumif(GpuHours, Priority == "LowPriority"), valid = sum(GpuHours)

@@ -1,0 +1,9 @@
+// B7 — devices within two releases of current.
+declare query_parameters(window:timespan = 28d, tolerance:int = 2);
+let current = toscalar(
+  ModelRegistry_CL | where stage_s == "Production" | summarize max(version_d));
+FleetHealth_CL
+| where TimeGenerated > ago(1h)
+| summarize arg_max(TimeGenerated, bundle_s) by device_id_s
+| extend version = toint(extract(@":(\d+)-", 1, bundle_s))
+| summarize good = countif(current - version <= tolerance), valid = count()

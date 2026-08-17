@@ -1,0 +1,375 @@
+{
+  "uid": "edgeforge-fleet-health",
+  "title": "edgeforge — Fleet Health",
+  "description": "Is the fleet safe right now? Audience: on-call, ops supervisors. Panels map to SLIs A1-A3 and B1-B5; see docs/06-sli-slo-and-telemetry.md.",
+  "tags": ["edgeforge", "fleet", "slo"],
+  "timezone": "utc",
+  "refresh": "1m",
+  "schemaVersion": 39,
+  "editable": false,
+  "time": { "from": "now-24h", "to": "now" },
+
+  "__comment_color": [
+    "Series are coloured by RING, not by rank. A filter that drops 'pilot' must",
+    "not repaint canary — colour follows the entity. Hexes are the validated",
+    "dark-surface categorical slots 1-3 (all-pairs CVD dE 9.4, normal-vision 20.9).",
+    "Threshold marks use the reserved status palette and always carry a text",
+    "label; status colour never carries meaning alone."
+  ],
+
+  "templating": {
+    "list": [
+      {
+        "name": "ring",
+        "label": "Ring",
+        "type": "custom",
+        "multi": true,
+        "includeAll": true,
+        "current": { "text": "All", "value": "$__all" },
+        "options": [
+          { "text": "canary", "value": "canary" },
+          { "text": "pilot", "value": "pilot" },
+          { "text": "production", "value": "production" }
+        ]
+      },
+      {
+        "name": "site",
+        "label": "Site",
+        "type": "query",
+        "multi": true,
+        "includeAll": true,
+        "datasource": { "type": "grafana-azure-monitor-datasource", "uid": "${datasource}" },
+        "query": "FleetHealth_CL | distinct site_s"
+      }
+    ]
+  },
+
+  "panels": [
+    {
+      "type": "row",
+      "title": "Safety invariants — no error budget, a single breach freezes releases",
+      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 0 },
+      "collapsed": false
+    },
+
+    {
+      "__comment": "Stat tiles, not charts. A number that is either fine or not fine does not need a plot.",
+      "type": "stat",
+      "title": "Invariant breaches (24 h)",
+      "description": "A1 missed personnel + A2 signature failures + A3 envelope violations. Any non-zero value is an incident, not a trend.",
+      "gridPos": { "h": 5, "w": 6, "x": 0, "y": 1 },
+      "options": {
+        "graphMode": "none",
+        "textMode": "value_and_name",
+        "colorMode": "value",
+        "reduceOptions": { "calcs": ["lastNotNull"] }
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "mappings": [{ "type": "value", "options": { "0": { "text": "0 — clear", "index": 0 } } }],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "#0ca30c", "value": null },
+              { "color": "#d03b3b", "value": 1 }
+            ]
+          }
+        }
+      },
+      "targets": [
+        {
+          "queryType": "Azure Log Analytics",
+          "azureLogAnalytics": {
+            "query": "FleetHealth_CL\n| where TimeGenerated > ago(24h)\n| where ring_s in ($ring) or '$ring' == '$__all'\n| summarize breaches = sum(safety_envelope_violations_d) + sum(signature_failures_d) + sum(missed_personnel_d)"
+          }
+        }
+      ]
+    },
+
+    {
+      "type": "stat",
+      "title": "Perception availability (28 d)",
+      "description": "B1. Denominator is time OPERATING, not wall-clock — a parked robot is not unavailable. Objective 99.5%.",
+      "gridPos": { "h": 5, "w": 6, "x": 6, "y": 1 },
+      "options": { "graphMode": "area", "colorMode": "value", "reduceOptions": { "calcs": ["lastNotNull"] } },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percentunit",
+          "decimals": 3,
+          "min": 0.98,
+          "max": 1,
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "#d03b3b", "value": null },
+              { "color": "#fab219", "value": 0.995 },
+              { "color": "#0ca30c", "value": 0.9975 }
+            ]
+          }
+        }
+      },
+      "targets": [
+        {
+          "queryType": "Azure Log Analytics",
+          "azureLogAnalytics": { "queryFile": "../queries/b1_perception_availability.kql" }
+        }
+      ]
+    },
+
+    {
+      "type": "stat",
+      "title": "Devices on intended bundle",
+      "description": "B5. Denominator is devices that were online and had the opportunity to converge — twin desired-state is convergent, so an offline robot is not a failure.",
+      "gridPos": { "h": 5, "w": 6, "x": 12, "y": 1 },
+      "options": { "graphMode": "area", "colorMode": "value", "reduceOptions": { "calcs": ["lastNotNull"] } },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percentunit",
+          "decimals": 2,
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "#d03b3b", "value": null },
+              { "color": "#fab219", "value": 0.99 },
+              { "color": "#0ca30c", "value": 0.998 }
+            ]
+          }
+        }
+      },
+      "targets": [
+        { "queryType": "Azure Log Analytics", "azureLogAnalytics": { "queryFile": "../queries/b5_bundle_convergence.kql" } }
+      ]
+    },
+
+    {
+      "type": "stat",
+      "title": "Active rollbacks",
+      "description": "Rollbacks in flight right now. Non-zero is not automatically bad — it means the safety net fired and is working.",
+      "gridPos": { "h": 5, "w": 6, "x": 18, "y": 1 },
+      "options": { "graphMode": "none", "colorMode": "value", "reduceOptions": { "calcs": ["lastNotNull"] } },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "#0ca30c", "value": null },
+              { "color": "#ec835a", "value": 1 }
+            ]
+          }
+        }
+      },
+      "targets": [
+        {
+          "queryType": "Azure Log Analytics",
+          "azureLogAnalytics": {
+            "query": "RolloutEvents_CL\n| where TimeGenerated > ago(1h) and event_s == 'rollback'\n| summarize active = countif(isnull(completed_t))"
+          }
+        }
+      ]
+    },
+
+    {
+      "type": "row",
+      "title": "Fleet reliability",
+      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 6 }
+    },
+
+    {
+      "__comment": "One axis. Latency in ms only — the 45 ms budget is drawn as a threshold line, never as a second scale.",
+      "type": "timeseries",
+      "title": "Inference latency p99 by ring",
+      "description": "B2. The 45 ms line is the perception budget from the vehicle latency chain, not a warning level.",
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 7 },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "ms",
+          "custom": {
+            "lineWidth": 2,
+            "fillOpacity": 0,
+            "pointSize": 8,
+            "showPoints": "never",
+            "thresholdsStyle": { "mode": "line+area" }
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "transparent", "value": null },
+              { "color": "#d03b3b", "value": 45 }
+            ]
+          }
+        },
+        "overrides": [
+          { "matcher": { "id": "byName", "options": "canary" }, "properties": [{ "id": "color", "value": { "mode": "fixed", "fixedColor": "#3987e5" } }] },
+          { "matcher": { "id": "byName", "options": "pilot" }, "properties": [{ "id": "color", "value": { "mode": "fixed", "fixedColor": "#d95926" } }] },
+          { "matcher": { "id": "byName", "options": "production" }, "properties": [{ "id": "color", "value": { "mode": "fixed", "fixedColor": "#199e70" } }] }
+        ]
+      },
+      "options": {
+        "legend": { "displayMode": "list", "placement": "bottom", "showLegend": true, "calcs": ["max"] },
+        "tooltip": { "mode": "multi", "sort": "desc" }
+      },
+      "targets": [
+        {
+          "queryType": "Azure Log Analytics",
+          "azureLogAnalytics": {
+            "query": "FleetHealth_CL\n| where $__timeFilter(TimeGenerated)\n| where ring_s in ($ring)\n| summarize p99 = avg(inference_p99_ms_d) by ring_s, bin(TimeGenerated, 5m)\n| order by TimeGenerated asc",
+            "resultFormat": "time_series"
+          }
+        }
+      ]
+    },
+
+    {
+      "type": "timeseries",
+      "title": "Personnel detections per km vs ring baseline",
+      "description": "Rollback predicate. Deviation is watched in BOTH directions: a collapse means the model has gone blind, a spike means nuisance stops — and operators learn to override a model that cries wolf.",
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 7 },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "custom": { "lineWidth": 2, "fillOpacity": 0, "showPoints": "never" }
+        },
+        "overrides": [
+          { "matcher": { "id": "byName", "options": "canary" }, "properties": [{ "id": "color", "value": { "mode": "fixed", "fixedColor": "#3987e5" } }] },
+          { "matcher": { "id": "byName", "options": "pilot" }, "properties": [{ "id": "color", "value": { "mode": "fixed", "fixedColor": "#d95926" } }] },
+          { "matcher": { "id": "byName", "options": "production" }, "properties": [{ "id": "color", "value": { "mode": "fixed", "fixedColor": "#199e70" } }] },
+          {
+            "__comment": "The +/-3 sigma band is drawn as a recessive filled area behind the series, not as a second axis.",
+            "matcher": { "id": "byRegexp", "options": "baseline_.*" },
+            "properties": [
+              { "id": "color", "value": { "mode": "fixed", "fixedColor": "#898781" } },
+              { "id": "custom.lineWidth", "value": 1 },
+              { "id": "custom.fillOpacity", "value": 8 },
+              { "id": "custom.lineStyle", "value": { "fill": "dash", "dash": [6, 6] } }
+            ]
+          }
+        ]
+      },
+      "options": {
+        "legend": { "displayMode": "list", "placement": "bottom", "showLegend": true },
+        "tooltip": { "mode": "multi" }
+      },
+      "targets": [
+        {
+          "queryType": "Azure Log Analytics",
+          "azureLogAnalytics": {
+            "query": "let baseline = FleetHealth_CL\n  | where TimeGenerated between (ago(14d) .. ago(1d))\n  | summarize mu = avg(detections_personnel_per_km_d), sigma = stdev(detections_personnel_per_km_d) by ring_s;\nFleetHealth_CL\n| where $__timeFilter(TimeGenerated)\n| where ring_s in ($ring)\n| summarize rate = avg(detections_personnel_per_km_d) by ring_s, bin(TimeGenerated, 15m)\n| join kind=leftouter baseline on ring_s\n| extend baseline_high = mu + 3 * sigma, baseline_low = mu - 3 * sigma\n| order by TimeGenerated asc",
+            "resultFormat": "time_series"
+          }
+        }
+      ]
+    },
+
+    {
+      "__comment": "Small multiples rather than eight series on one plot — past three series the all-pairs colour floors cannot be met, so we facet instead of cycling hues.",
+      "type": "timeseries",
+      "title": "Out-of-distribution rate by site",
+      "description": "Earliest available drift warning. A spike at ONE site is usually physical (new equipment, changed lighting, a re-muck); fleet-wide suggests the release. Runbook P2.",
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 15 },
+      "repeat": "site",
+      "repeatDirection": "h",
+      "maxPerRow": 3,
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percentunit",
+          "decimals": 3,
+          "color": { "mode": "fixed", "fixedColor": "#3987e5" },
+          "custom": { "lineWidth": 2, "fillOpacity": 10, "showPoints": "never", "thresholdsStyle": { "mode": "line" } },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "transparent", "value": null },
+              { "color": "#fab219", "value": 0.0105 }
+            ]
+          }
+        }
+      },
+      "options": { "legend": { "showLegend": false }, "tooltip": { "mode": "single" } },
+      "targets": [
+        {
+          "queryType": "Azure Log Analytics",
+          "azureLogAnalytics": {
+            "query": "FleetHealth_CL\n| where $__timeFilter(TimeGenerated) and site_s == '$site'\n| summarize ood = avg(ood_rate_d) by bin(TimeGenerated, 15m)\n| order by TimeGenerated asc",
+            "resultFormat": "time_series"
+          }
+        }
+      ]
+    },
+
+    {
+      "type": "bargauge",
+      "title": "Thermal headroom by site (28 d)",
+      "description": "B4. Measured separately from latency on purpose — throttling makes every latency figure untrustworthy, and a thermal fault should not be able to masquerade as a model regression.",
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 15 },
+      "options": {
+        "displayMode": "gradient",
+        "orientation": "horizontal",
+        "showUnfilled": true,
+        "reduceOptions": { "calcs": ["lastNotNull"] }
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percentunit",
+          "min": 0.9,
+          "max": 1,
+          "decimals": 2,
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "#d03b3b", "value": null },
+              { "color": "#ec835a", "value": 0.98 },
+              { "color": "#fab219", "value": 0.99 },
+              { "color": "#0ca30c", "value": 0.995 }
+            ]
+          }
+        }
+      },
+      "targets": [
+        {
+          "queryType": "Azure Log Analytics",
+          "azureLogAnalytics": {
+            "query": "FleetHealth_CL\n| where TimeGenerated > ago(28d)\n| extend minutes = operating_seconds_d / 60.0\n| summarize headroom = sum(minutes * (1.0 - throttled_pct_d / 100.0)) / sum(minutes) by site_s"
+          }
+        }
+      ]
+    },
+
+    {
+      "__comment": "The table view is the accessibility fallback required whenever a status colour is doing work — identity is never colour-alone.",
+      "type": "table",
+      "title": "SLO status — fleet group",
+      "description": "Generated by src/edgeforge/fleet/slo.py and written back as SloStatus_CL. This table is also the non-colour reading of every threshold on this page.",
+      "gridPos": { "h": 8, "w": 24, "x": 0, "y": 23 },
+      "options": { "showHeader": true, "cellHeight": "sm" },
+      "fieldConfig": {
+        "defaults": { "custom": { "align": "left" } },
+        "overrides": [
+          {
+            "matcher": { "id": "byName", "options": "status" },
+            "properties": [
+              {
+                "id": "mappings",
+                "value": [
+                  { "type": "value", "options": { "meeting": { "text": "meeting", "color": "#0ca30c", "index": 0 } } },
+                  { "type": "value", "options": { "at_risk": { "text": "AT RISK", "color": "#fab219", "index": 1 } } },
+                  { "type": "value", "options": { "breaching": { "text": "BREACHING", "color": "#d03b3b", "index": 2 } } }
+                ]
+              },
+              { "id": "custom.cellOptions", "value": { "type": "color-text" } }
+            ]
+          }
+        ]
+      },
+      "targets": [
+        {
+          "queryType": "Azure Log Analytics",
+          "azureLogAnalytics": {
+            "query": "SloStatus_CL\n| where TimeGenerated > ago(2h) and group_s == 'fleet'\n| summarize arg_max(TimeGenerated, *) by slo_id_s\n| project id = slo_id_s, indicator = name_s, observed = observed_d, objective = objective_d, budget_remaining_pct = budget_remaining_pct_d, burn_rate = burn_rate_d, status = status_s\n| order by id asc"
+          }
+        }
+      ]
+    }
+  ]
+}

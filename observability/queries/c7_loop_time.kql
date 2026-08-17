@@ -1,0 +1,9 @@
+// C7 — field condition observed to production rollout, end to end.
+// Measured from pipeline events rather than estimated in a retro.
+declare query_parameters(window:timespan = 90d, objective:timespan = 11d);
+PipelineEvents_CL
+| where TimeGenerated > ago(window)
+| summarize observed = min(started_t), shipped = maxif(ended_t, stage_s == "rollout_production")
+    by loop_id_s
+| where isnotnull(shipped)
+| summarize good = countif(shipped - observed <= objective), valid = count()

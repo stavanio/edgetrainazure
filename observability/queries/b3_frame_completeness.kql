@@ -1,0 +1,5 @@
+// B3 — frames that reached inference vs frames the sensors produced.
+declare query_parameters(window:timespan = 28d);
+FleetHealth_CL
+| where TimeGenerated > ago(window)
+| summarize good = sum(frames_inferred_d), valid = sum(frames_captured_d)

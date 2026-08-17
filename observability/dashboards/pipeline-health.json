@@ -1,0 +1,258 @@
+{
+  "uid": "edgeforge-pipeline-health",
+  "title": "edgeforge — Pipeline Health",
+  "description": "Is the loop turning, and where is it stuck? Audience: platform and ML teams. Panels map to SLIs C1-C7 and D3.",
+  "tags": ["edgeforge", "pipeline", "slo"],
+  "timezone": "utc",
+  "refresh": "5m",
+  "schemaVersion": 39,
+  "editable": false,
+  "time": { "from": "now-7d", "to": "now" },
+
+  "panels": [
+    {
+      "__comment": [
+        "The funnel is the panel that answers 'where is it stuck' at a glance,",
+        "which is where runbook P4 starts. Ordinal ramp: a single blue hue,",
+        "light-to-dark by stage. Starts at step 250 so the lightest bar still",
+        "clears 2:1 against the surface — an ordinal ramp may not fade into it."
+      ],
+      "type": "barchart",
+      "title": "Frame funnel — captured to snapshot",
+      "description": "~250x fewer frames reach a labeler than the sensors produce. Each bar is annotated with its stage-over-stage retention, because the absolute counts span four orders of magnitude and the ratios are the story.",
+      "gridPos": { "h": 10, "w": 14, "x": 0, "y": 0 },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "custom": {
+            "lineWidth": 0,
+            "fillOpacity": 100,
+            "barWidth": 0.72,
+            "barRadius": 0.25,
+            "axisLabel": "frames"
+          }
+        },
+        "overrides": [
+          { "matcher": { "id": "byName", "options": "captured" }, "properties": [{ "id": "color", "value": { "mode": "fixed", "fixedColor": "#86b6ef" } }] },
+          { "matcher": { "id": "byName", "options": "uploaded" }, "properties": [{ "id": "color", "value": { "mode": "fixed", "fixedColor": "#5598e7" } }] },
+          { "matcher": { "id": "byName", "options": "quality_passed" }, "properties": [{ "id": "color", "value": { "mode": "fixed", "fixedColor": "#3987e5" } }] },
+          { "matcher": { "id": "byName", "options": "deduped" }, "properties": [{ "id": "color", "value": { "mode": "fixed", "fixedColor": "#2a78d6" } }] },
+          { "matcher": { "id": "byName", "options": "curated" }, "properties": [{ "id": "color", "value": { "mode": "fixed", "fixedColor": "#256abf" } }] },
+          { "matcher": { "id": "byName", "options": "routed_to_human" }, "properties": [{ "id": "color", "value": { "mode": "fixed", "fixedColor": "#1c5cab" } }] },
+          { "matcher": { "id": "byName", "options": "in_snapshot" }, "properties": [{ "id": "color", "value": { "mode": "fixed", "fixedColor": "#184f95" } }] }
+        ]
+      },
+      "options": {
+        "orientation": "horizontal",
+        "showValue": "always",
+        "text": { "valueSize": 12 },
+        "legend": { "showLegend": false },
+        "tooltip": { "mode": "single" }
+      },
+      "targets": [
+        {
+          "queryType": "Azure Log Analytics",
+          "azureLogAnalytics": {
+            "query": "PipelineFunnel_CL\n| where $__timeFilter(TimeGenerated)\n| summarize frames = sum(count_d) by stage_s\n| extend ordinal = case(stage_s == 'captured', 1, stage_s == 'uploaded', 2, stage_s == 'quality_passed', 3, stage_s == 'deduped', 4, stage_s == 'curated', 5, stage_s == 'routed_to_human', 6, 7)\n| order by ordinal asc\n| extend retention_pct = 100.0 * frames / toscalar(PipelineFunnel_CL | where stage_s == 'captured' | summarize sum(count_d))\n| project stage_s, frames, retention_pct"
+          }
+        }
+      ]
+    },
+
+    {
+      "type": "stat",
+      "title": "Uplink yield (28 d)",
+      "description": "D3. Frames surviving to /curated over frames uploaded. A falling yield means the fleet is uploading things the cloud then discards — retune the twin thresholds before anyone proposes buying more uplink. Objective >= 40%.",
+      "gridPos": { "h": 5, "w": 5, "x": 14, "y": 0 },
+      "options": { "graphMode": "area", "colorMode": "value", "reduceOptions": { "calcs": ["lastNotNull"] } },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percentunit",
+          "decimals": 1,
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "#d03b3b", "value": null },
+              { "color": "#fab219", "value": 0.4 },
+              { "color": "#0ca30c", "value": 0.5 }
+            ]
+          }
+        }
+      },
+      "targets": [
+        { "queryType": "Azure Log Analytics", "azureLogAnalytics": { "queryFile": "../queries/d3_uplink_yield.kql" } }
+      ]
+    },
+
+    {
+      "type": "stat",
+      "title": "T0 event delivery (28 d)",
+      "description": "C1. Safety events landing within 24 h of surfacing. Three nines against every other stream's two: T0 is evidence, and losing one to a ring-buffer overwrite is the worst outcome the curator can produce.",
+      "gridPos": { "h": 5, "w": 5, "x": 19, "y": 0 },
+      "options": { "graphMode": "none", "colorMode": "value", "reduceOptions": { "calcs": ["lastNotNull"] } },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percentunit",
+          "decimals": 3,
+          "min": 0.99,
+          "max": 1,
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "#d03b3b", "value": null },
+              { "color": "#0ca30c", "value": 0.999 }
+            ]
+          }
+        }
+      },
+      "targets": [
+        { "queryType": "Azure Log Analytics", "azureLogAnalytics": { "queryFile": "../queries/c1_t0_delivery.kql" } }
+      ]
+    },
+
+    {
+      "type": "stat",
+      "title": "Curation success (28 d)",
+      "description": "C3. 'Unattended' is the point: a job that succeeded after someone re-ran it by hand at 2am did not succeed for this SLI. Objective 98%.",
+      "gridPos": { "h": 5, "w": 5, "x": 14, "y": 5 },
+      "options": { "graphMode": "area", "colorMode": "value", "reduceOptions": { "calcs": ["lastNotNull"] } },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percentunit",
+          "decimals": 2,
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "#d03b3b", "value": null },
+              { "color": "#fab219", "value": 0.98 },
+              { "color": "#0ca30c", "value": 0.995 }
+            ]
+          }
+        }
+      },
+      "targets": [
+        { "queryType": "Azure Log Analytics", "azureLogAnalytics": { "queryFile": "../queries/c3_curation_success.kql" } }
+      ]
+    },
+
+    {
+      "type": "stat",
+      "title": "Reproducibility canary (90 d)",
+      "description": "C5. The weekly re-run of a fixed job. Target 1.0, but this is an SLO not an invariant: one flake is a ticket, two in a window means the environment has drifted and the lineage claim is at risk.",
+      "gridPos": { "h": 5, "w": 5, "x": 19, "y": 5 },
+      "options": { "graphMode": "none", "colorMode": "value", "reduceOptions": { "calcs": ["lastNotNull"] } },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percentunit",
+          "decimals": 1,
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "#d03b3b", "value": null },
+              { "color": "#0ca30c", "value": 1 }
+            ]
+          }
+        }
+      },
+      "targets": [
+        { "queryType": "Azure Log Analytics", "azureLogAnalytics": { "queryFile": "../queries/c5_reproducibility.kql" } }
+      ]
+    },
+
+    {
+      "__comment": "One axis: days. The 11-day objective is a threshold line, never a second scale.",
+      "type": "histogram",
+      "title": "Loop time distribution vs the 11-day objective",
+      "description": "C7. Field condition observed to production rollout, measured from pipeline events rather than estimated in a retro. Nine of the eleven days are automated; the two human steps are deliberately human.",
+      "gridPos": { "h": 9, "w": 12, "x": 0, "y": 10 },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "d",
+          "color": { "mode": "fixed", "fixedColor": "#3987e5" },
+          "custom": { "lineWidth": 0, "fillOpacity": 90, "barRadius": 0.25 },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "transparent", "value": null },
+              { "color": "#d03b3b", "value": 11 }
+            ]
+          }
+        }
+      },
+      "options": { "bucketSize": 1, "legend": { "showLegend": false } },
+      "targets": [
+        {
+          "queryType": "Azure Log Analytics",
+          "azureLogAnalytics": {
+            "query": "PipelineEvents_CL\n| where TimeGenerated > ago(90d)\n| summarize observed = min(started_t), shipped = maxif(ended_t, stage_s == 'rollout_production') by loop_id_s\n| where isnotnull(shipped)\n| project loop_days = datetime_diff('hour', shipped, observed) / 24.0"
+          }
+        }
+      ]
+    },
+
+    {
+      "type": "timeseries",
+      "title": "Label queue — depth and oldest item",
+      "description": "C4. The longest pole in the loop. Depth and age are two measures of different scale, so they are two panels' worth of information shown as two series on ONE count axis — age is bucketed to days-of-items, never a second y-axis.",
+      "gridPos": { "h": 9, "w": 12, "x": 12, "y": 10 },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "custom": { "lineWidth": 2, "fillOpacity": 0, "showPoints": "never" }
+        },
+        "overrides": [
+          { "matcher": { "id": "byName", "options": "queued" }, "properties": [{ "id": "color", "value": { "mode": "fixed", "fixedColor": "#3987e5" } }] },
+          { "matcher": { "id": "byName", "options": "older_than_72h" }, "properties": [{ "id": "color", "value": { "mode": "fixed", "fixedColor": "#d95926" } }] }
+        ]
+      },
+      "options": {
+        "legend": { "displayMode": "list", "placement": "bottom", "showLegend": true },
+        "tooltip": { "mode": "multi" }
+      },
+      "targets": [
+        {
+          "queryType": "Azure Log Analytics",
+          "azureLogAnalytics": {
+            "query": "LabelQueue_CL\n| where $__timeFilter(TimeGenerated)\n| summarize queued = countif(isnull(adjudicated_t)), older_than_72h = countif(isnull(adjudicated_t) and routed_t < ago(72h)) by bin(TimeGenerated, 1h)\n| order by TimeGenerated asc",
+            "resultFormat": "time_series"
+          }
+        }
+      ]
+    },
+
+    {
+      "type": "table",
+      "title": "SLO status — pipeline group",
+      "description": "Generated by src/edgeforge/fleet/slo.py. Also the non-colour reading of every threshold on this page.",
+      "gridPos": { "h": 8, "w": 24, "x": 0, "y": 19 },
+      "options": { "showHeader": true, "cellHeight": "sm" },
+      "fieldConfig": {
+        "defaults": { "custom": { "align": "left" } },
+        "overrides": [
+          {
+            "matcher": { "id": "byName", "options": "status" },
+            "properties": [
+              {
+                "id": "mappings",
+                "value": [
+                  { "type": "value", "options": { "meeting": { "text": "meeting", "color": "#0ca30c", "index": 0 } } },
+                  { "type": "value", "options": { "at_risk": { "text": "AT RISK", "color": "#fab219", "index": 1 } } },
+                  { "type": "value", "options": { "breaching": { "text": "BREACHING", "color": "#d03b3b", "index": 2 } } }
+                ]
+              },
+              { "id": "custom.cellOptions", "value": { "type": "color-text" } }
+            ]
+          }
+        ]
+      },
+      "targets": [
+        {
+          "queryType": "Azure Log Analytics",
+          "azureLogAnalytics": {
+            "query": "SloStatus_CL\n| where TimeGenerated > ago(2h) and group_s == 'pipeline'\n| summarize arg_max(TimeGenerated, *) by slo_id_s\n| project id = slo_id_s, indicator = name_s, observed = observed_d, objective = objective_d, budget_remaining_pct = budget_remaining_pct_d, burn_rate = burn_rate_d, status = status_s\n| order by id asc"
+          }
+        }
+      ]
+    }
+  ]
+}

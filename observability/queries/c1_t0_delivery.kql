@@ -1,0 +1,8 @@
+// C1 — safety events landing in /raw within 24h of the robot surfacing.
+// Three nines against every other stream's two: T0 is evidence, and losing one
+// to a ring-buffer overwrite is the worst outcome the curator can produce.
+declare query_parameters(window:timespan = 28d, budget:timespan = 24h);
+PipelineEvents_CL
+| where TimeGenerated > ago(window) and stage_s == "t0_upload"
+| extend latency = landed_t - surfaced_t
+| summarize good = countif(latency <= budget and status_s == "landed"), valid = count()

@@ -1,0 +1,8 @@
+// B2 — inference latency against the 45 ms perception budget.
+// Counted per frame, not per sample: a 30 s sample in which p99 breached is not
+// equivalent to a 30 s sample of clean frames, and averaging samples hides that.
+declare query_parameters(window:timespan = 28d, budget_ms:real = 45.0);
+FleetHealth_CL
+| where TimeGenerated > ago(window)
+| extend breached = iff(inference_p99_ms_d > budget_ms, frames_inferred_d * 0.01, 0.0)
+| summarize good = sum(frames_inferred_d) - sum(breached), valid = sum(frames_inferred_d)

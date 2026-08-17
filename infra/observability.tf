@@ -282,3 +282,149 @@ resource "azurerm_monitor_diagnostic_setting" "audit" {
     enabled  = true
   }
 }
+
+###############################################################################
+# SLO burn-rate alerting and dashboards
+#
+# The rules below are generated from observability/slo.yaml -- that file is the
+# single source of truth, and these are its Azure Monitor projection. Both the
+# long and the short window must be burning for an alert to fire: the long
+# window alone stays hot for hours after a problem resolves, which is how
+# burn-rate alerting gets a reputation for noise.
+###############################################################################
+
+locals {
+  slo_catalogue = yamldecode(file("${path.module}/../observability/slo.yaml"))
+
+  # Fraction-kind SLOs are the only ones with an error budget to burn. Cost
+  # ceilings (D2, D6) and the trend indicator (D7) are evaluated by the
+  # scheduled slo-report job instead -- a burn rate against a dollar ceiling
+  # would not mean anything.
+  burnable_slos = {
+    for s in local.slo_catalogue.slos : s.id => s
+    if lookup(s, "kind", "fraction") == "fraction"
+  }
+
+  # Cartesian product of burnable SLOs x page-severity burn-rate rules. Ticket
+  # tiers are filed by the daily slo-report run rather than by an alert rule --
+  # paging someone for a 1x burn is how alert fatigue starts.
+  burn_rules = merge([
+    for slo_id, slo in local.burnable_slos : {
+      for rule in local.slo_catalogue.burn_rate_policy :
+      "${slo_id}-${replace(tostring(rule.burn_rate), ".", "_")}" => {
+        slo_id       = slo_id
+        slo_name     = slo.name
+        target       = slo.target
+        query_file   = slo.query
+        burn_rate    = rule.burn_rate
+        long_window  = rule.long_window
+        short_window = rule.short_window
+      }
+      if rule.severity == "page"
+    }
+  ]...)
+}
+
+resource "azurerm_monitor_action_group" "slo_page" {
+  name                = "ag-slo-page-${local.suffix}"
+  resource_group_name = azurerm_resource_group.main.name
+  short_name          = "slopage"
+  tags                = local.common_tags
+
+  # Page-severity burn only. Ticket tiers arrive through the daily report.
+  email_receiver {
+    name          = "platform-oncall"
+    email_address = "platform-oncall@example.invalid"
+  }
+}
+
+resource "azurerm_monitor_scheduled_query_rules_alert_v2" "slo_burn" {
+  for_each = local.burn_rules
+
+  name                = "slo-burn-${lower(each.key)}-${local.suffix}"
+  resource_group_name = azurerm_resource_group.main.name
+  location            = azurerm_resource_group.main.location
+  severity            = 1
+  scopes              = [azurerm_log_analytics_workspace.main.id]
+
+  evaluation_frequency = "PT5M"
+  window_duration      = each.value.long_window
+
+  description = join(" ", [
+    "SLO ${each.value.slo_id} (${each.value.slo_name}) burning at",
+    "${each.value.burn_rate}x over ${each.value.long_window}",
+    "and ${each.value.short_window}. Budget = ${1 - each.value.target}."
+  ])
+
+  criteria {
+    # The SLI is recomputed here rather than read from SloStatus_CL: an alert
+    # must not depend on the reporting job having run recently.
+    query = <<-KQL
+      let budget = ${1 - each.value.target};
+      let long_sli = toscalar(
+        SloSamples_CL
+        | where TimeGenerated > ago(${replace(each.value.long_window, "PT", "")})
+        | where slo_id_s == '${each.value.slo_id}'
+        | summarize sum(good_d) / sum(valid_d));
+      let short_sli = toscalar(
+        SloSamples_CL
+        | where TimeGenerated > ago(${replace(each.value.short_window, "PT", "")})
+        | where slo_id_s == '${each.value.slo_id}'
+        | summarize sum(good_d) / sum(valid_d));
+      print
+        slo_id = '${each.value.slo_id}',
+        long_burn  = (1.0 - long_sli)  / budget,
+        short_burn = (1.0 - short_sli) / budget
+      | where long_burn >= ${each.value.burn_rate} and short_burn >= ${each.value.burn_rate}
+    KQL
+
+    time_aggregation_method = "Count"
+    threshold               = 0
+    operator                = "GreaterThan"
+
+    failing_periods {
+      minimum_failing_periods_to_trigger_alert = 1
+      number_of_evaluation_periods             = 1
+    }
+  }
+
+  action {
+    action_groups = [azurerm_monitor_action_group.slo_page.id]
+  }
+
+  tags = merge(local.common_tags, {
+    slo_id    = each.value.slo_id
+    burn_rate = tostring(each.value.burn_rate)
+  })
+}
+
+# --- Dashboards, provisioned as code ----------------------------------------
+#
+# Nobody builds a dashboard by hand and nobody edits one in the UI: the Grafana
+# instance is created with editable=false and these files are the source. A
+# dashboard that drifts from its definition is a dashboard nobody can review.
+
+resource "azurerm_dashboard_grafana_managed_private_endpoint" "logs" {
+  count = var.environment == "prod" ? 1 : 0
+
+  grafana_id                   = azurerm_dashboard_grafana.main.id
+  name                         = "mpe-logs-${local.suffix}"
+  location                     = azurerm_resource_group.main.location
+  private_link_resource_id     = azurerm_log_analytics_workspace.main.id
+  group_ids                    = ["azuremonitor"]
+  private_link_resource_region = azurerm_resource_group.main.location
+}
+
+# The dashboard JSON is applied by `make register-observability` via the Grafana
+# API, because the azurerm provider has no first-class dashboard resource. The
+# files are the contract; this output tells the Makefile where to POST them.
+output "grafana_dashboard_targets" {
+  description = "Grafana endpoint and the dashboard files to apply against it."
+  value = {
+    endpoint = azurerm_dashboard_grafana.main.endpoint
+    dashboards = [
+      for d in local.slo_catalogue.dashboards :
+      "observability/dashboards/${d.id}.json"
+    ]
+  }
+}

@@ -1,0 +1,9 @@
+// B1 — perception availability. Denominator is time OPERATING, not wall-clock:
+// a parked robot is not unavailable, and counting it would flatter the number.
+declare query_parameters(window:timespan = 28d, ring:string = "*");
+FleetHealth_CL
+| where TimeGenerated > ago(window)
+| where ring == ring or ring == "*"
+| summarize
+    good  = sum(detecting_seconds_d) / 60.0,
+    valid = sum(operating_seconds_d) / 60.0
